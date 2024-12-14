@@ -629,6 +629,19 @@ class Runner:
                 info=info,
             )
 
+            # Score Distillation Sampling.
+            # Ref: https://github.com/ashawkey/stable-dreamfusion/blob/main/guidance/sd_utils.py
+            # noise = torch.randn_like(colors)
+            # colors_noisy = self.scheduler.add_noise(colors, noise, t)
+            # noise_pred = self.unet(colors_noisy, t).sample # noise_pred contain information about score
+            # toch.no_grad for unet
+            # from torch.func import grad
+            # sds_loss = grad((noise - noise_pred)**2)
+            # 
+
+            # so, we have rendered image and we have original image, 
+            # we probably should use original image as well
+
             # loss
             l1loss = F.l1_loss(colors, pixels)
             ssimloss = 1.0 - fused_ssim(

@@ -19,6 +19,8 @@ Arxiv reference: https://arxiv.org/abs/2409.06765
 * If all goes well I think the code from this repo should be pushed as a pull request to gsplat library. 
 * Beauty of 3D Gaussian splatting is that is start with small number of ellipsoids, so that not all GPU memory allocated in the beginning of the training <br>
   This allows to prototype on the low end PCs
+* Need to try different upscales of super resolution diffusion models
+* SR Diffusion models require interpolation step. Can we maybe use image reconstruction diffusion models: https://arxiv.org/pdf/2306.11536?
 
 
 ## Some useful commands
@@ -59,3 +61,5 @@ CUDA_VISIBLE_DEVICES=0 python simple_trainer.py default --disable_viewer --data_
 ## TODO
 * Missing SDS integation
 * Check how SSIM works
+* Add wandb logging
+* https://arxiv.org/abs/2401.05293
