@@ -631,13 +631,16 @@ class Runner:
 
             # Score Distillation Sampling.
             # Ref: https://github.com/ashawkey/stable-dreamfusion/blob/main/guidance/sd_utils.py
-            # noise = torch.randn_like(colors)
-            # colors_noisy = self.scheduler.add_noise(colors, noise, t)
-            # noise_pred = self.unet(colors_noisy, t).sample # noise_pred contain information about score
+            # for u-net we are not building auto diff graph
+            # with torch.no_grad():
+                # noise = torch.randn_like(colors)
+                # colors_noisy = self.scheduler.add_noise(colors, noise, t)
+                # # noise_pred contain information about score
+                # noise_pred = self.unet(colors_noisy, t).sample
             # toch.no_grad for unet
-            # from torch.func import grad
-            # sds_loss = grad((noise - noise_pred)**2)
-            # 
+            # since the graph is not build through u-net, only gaussian waits going to be updated
+            # sds_loss = grad((noise - noise_pred), <parameters of every_gaussian>)
+            # sds_loss.backward()
 
             # so, we have rendered image and we have original image, 
             # we probably should use original image as well
