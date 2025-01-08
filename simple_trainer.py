@@ -42,6 +42,7 @@ from gsplat.rendering import rasterization
 from gsplat.strategy import DefaultStrategy, MCMCStrategy
 from gsplat.optimizers import SelectiveAdam
 
+from guidance import SDSLoss3DGS
 
 @dataclass
 class Config:
@@ -80,8 +81,7 @@ class Config:
     steps_scaler: float = 1.0
 
     # Number of training steps
-    #max_steps: int = 30_000
-    max_steps: int = 2_000
+    max_steps: int = 30_000
     # Steps to evaluate the model
     eval_steps: List[int] = field(default_factory=lambda: [7_000, 30_000])
     # Steps to save the model
@@ -103,7 +103,8 @@ class Config:
     init_scale: float = 1.0
     # Weight for SSIM loss
     ssim_lambda: float = 0.2
-
+    # Use Score Distillation Sampling
+    use_sds_loss: bool = False
     # Near plane clipping distance
     near_plane: float = 0.01
     # Far plane clipping distance
@@ -419,6 +420,10 @@ class Runner:
         # Losses & Metrics.
         self.ssim = StructuralSimilarityIndexMeasure(data_range=1.0).to(self.device)
         self.psnr = PeakSignalNoiseRatio(data_range=1.0).to(self.device)
+        if cfg.use_sds_loss:
+            # initialize SDS loss
+            self.sds_loss = SDSLoss3DGS()
+            # create an empty embedding for super resolution prompt
 
         if cfg.lpips_net == "alex":
             self.lpips = LearnedPerceptualImagePatchSimilarity(
@@ -629,28 +634,14 @@ class Runner:
                 info=info,
             )
 
-            # Score Distillation Sampling.
-            # Ref: https://github.com/ashawkey/stable-dreamfusion/blob/main/guidance/sd_utils.py
-            # for u-net we are not building auto diff graph
-            # with torch.no_grad():
-                # noise = torch.randn_like(colors)
-                # colors_noisy = self.scheduler.add_noise(colors, noise, t)
-                # # noise_pred contain information about score
-                # noise_pred = self.unet(colors_noisy, t).sample
-            # toch.no_grad for unet
-            # since the graph is not build through u-net, only gaussian waits going to be updated
-            # sds_loss = grad((noise - noise_pred), <parameters of every_gaussian>)
-            # sds_loss.backward()
-
-            # so, we have rendered image and we have original image, 
-            # we probably should use original image as well
-
             # loss
             l1loss = F.l1_loss(colors, pixels)
             ssimloss = 1.0 - fused_ssim(
                 colors.permute(0, 3, 1, 2), pixels.permute(0, 3, 1, 2), padding="valid"
             )
             loss = l1loss * (1.0 - cfg.ssim_lambda) + ssimloss * cfg.ssim_lambda
+            if cfg.use_sds_loss:
+                loss += self.sds_loss(colors)
             if cfg.depth_loss:
                 # query depths from depth map
                 points = torch.stack(
