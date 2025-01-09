@@ -40,7 +40,7 @@ from gsplat.compression import PngCompression
 from gsplat.distributed import cli
 from gsplat.rendering import rasterization
 from gsplat.strategy import DefaultStrategy, MCMCStrategy
-from gsplat.optimizers import SelectiveAdam
+#from gsplat.optimizers import SelectiveAdam
 
 from guidance import SDSLoss3DGS
 
