@@ -77,7 +77,8 @@ class SDSLoss3DGS(torch.nn.Module):
         # prepare images
         batch_size = images.shape[0]
         # positive and negative embeddings
-        prompt_embeddings = [self.prompt_embeddings[0]] * batch_size + [self.prompt_embeddings[1]] * batch_size
+        batch_embeddings = [self.prompt_embeddings[0].repeat(batch_size, 1, 1),
+                            self.prompt_embeddings[1].repeat(batch_size, 1, 1)]
 
         latents = self.prepare_latents(images)
 
@@ -112,7 +113,7 @@ class SDSLoss3DGS(torch.nn.Module):
             noise_pred = self.forward_unet(
                 torch.cat(2 * [latents_noisy]),
                 torch.cat(2 * [t]),
-                torch.cat(prompt_embeddings),
+                torch.cat(batch_embeddings),
                 class_labels=noise_level
             )
         # convert noise prediction into gradient

@@ -81,11 +81,11 @@ class Config:
     steps_scaler: float = 1.0
 
     # Number of training steps
-    max_steps: int = 30_000
+    max_steps: int = 31_000
     # Steps to evaluate the model
-    eval_steps: List[int] = field(default_factory=lambda: [7_000, 30_000])
+    eval_steps: List[int] = field(default_factory=lambda: [7_000, 30_000, 31_000])
     # Steps to save the model
-    save_steps: List[int] = field(default_factory=lambda: [7_000, 30_000])
+    save_steps: List[int] = field(default_factory=lambda: [7_000, 30_000, 31_000])
 
     # Initialization strategy
     init_type: str = "sfm"
@@ -104,7 +104,8 @@ class Config:
     # Weight for SSIM loss
     ssim_lambda: float = 0.2
     # Use Score Distillation Sampling
-    use_sds_loss: bool = False
+    # Last 1000 iterations
+    sds_loss: int = 1000
     # Near plane clipping distance
     near_plane: float = 0.01
     # Far plane clipping distance
@@ -420,7 +421,7 @@ class Runner:
         # Losses & Metrics.
         self.ssim = StructuralSimilarityIndexMeasure(data_range=1.0).to(self.device)
         self.psnr = PeakSignalNoiseRatio(data_range=1.0).to(self.device)
-        if cfg.use_sds_loss:
+        if cfg.sds_loss:
             # initialize SDS loss
             self.sds_loss = SDSLoss3DGS()
             # create an empty embedding for super resolution prompt
@@ -640,8 +641,11 @@ class Runner:
                 colors.permute(0, 3, 1, 2), pixels.permute(0, 3, 1, 2), padding="valid"
             )
             loss = l1loss * (1.0 - cfg.ssim_lambda) + ssimloss * cfg.ssim_lambda
-            if cfg.use_sds_loss:
-                loss += self.sds_loss(colors)
+            if (max_steps - step) <= cfg.sds_loss:
+                # sds loss expects channels to be a second dimension
+                # permute [b, H, W, 3] -> [b, 3, H, W] 
+                sds_loss = self.sds_loss(colors.permute((0, 3, 1, 2)))
+                loss += sds_loss
             if cfg.depth_loss:
                 # query depths from depth map
                 points = torch.stack(
