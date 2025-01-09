@@ -423,6 +423,7 @@ class Runner:
         self.psnr = PeakSignalNoiseRatio(data_range=1.0).to(self.device)
         if cfg.sds_loss:
             # initialize SDS loss
+            print("Creating SDS loss..")
             self.sds_loss = SDSLoss3DGS()
             # create an empty embedding for super resolution prompt
 
