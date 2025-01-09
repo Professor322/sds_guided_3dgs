@@ -643,6 +643,8 @@ class Runner:
             )
             loss = l1loss * (1.0 - cfg.ssim_lambda) + ssimloss * cfg.ssim_lambda
             if (max_steps - step) <= cfg.sds_loss:
+                if max_steps - step == cfg.sds_loss:
+                    print("Starting SDS loss")
                 # sds loss expects channels to be a second dimension
                 # permute [b, H, W, 3] -> [b, 3, H, W] 
                 sds_loss = self.sds_loss(colors.permute((0, 3, 1, 2)))
