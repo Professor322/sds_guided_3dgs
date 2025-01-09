@@ -13,9 +13,10 @@ class SDSLoss3DGS(torch.nn.Module):
         # load the model
         self.device = torch.device('cuda:0')
 
-        deepfloyd_model = "DeepFloyd/IF-II-L-v1.0" 
+        # this is to make it work on the cluster as it does not have internet access to download the model
+        deepfloyd_sr_model_path = "/home/nskochetkov/.cache/huggingface/hub/models--DeepFloyd--IF-II-L-v1.0/snapshots/609476ce702b2d94aff7d1f944dcc54d4f972901" 
         pipe = DiffusionPipeline.from_pretrained(
-            deepfloyd_model,
+            deepfloyd_sr_model_path,
             #text_encoder=None,
             safety_checker=None,
             watermarker=None,
@@ -29,7 +30,7 @@ class SDSLoss3DGS(torch.nn.Module):
         self.scheduler = pipe.scheduler
         self.num_train_timesteps = self.scheduler.config.num_train_timesteps
         self.alphas = self.scheduler.alphas_cumprod.to(self.device)
-        self.empty_prompt, _ = pipe.encode_prompt("")
+        self.prompt_embeddings = pipe.encode_prompt("")
 
     @torch.amp.autocast('cuda', enabled=False)
     def forward_unet(self, latents, t, encoder_hidden_states, **kwargs):
@@ -75,8 +76,8 @@ class SDSLoss3DGS(torch.nn.Module):
     def forward(self, images, min_step=20, max_step=980, guidance_scale=10., lowres_noise_level=0.75, scheduler_timestep=None):
         # prepare images
         batch_size = images.shape[0]
-        # create empty prompt batch
-        prompt_embeddings = torch.stack([self.empty_prompt for _ in range(batch_size)])
+        # positive and negative embeddings
+        prompt_embeddings = [self.prompt_embeddings[0]] * batch_size + [self.prompt_embeddings[1]] * batch_size
 
         latents = self.prepare_latents(images)
 
