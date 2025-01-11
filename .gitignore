@@ -1,4 +1,6 @@
 # This repo related
+ckpt*
+if_stage*
 data
 results
 # Byte-compiled / optimized / DLL files

@@ -36,18 +36,18 @@ do
     echo "=== Eval Stats ==="
 
     for STATS in $RESULT_DIR/$SCENE/stats/val*.json;
-    do  
+    do
         echo $STATS
-        cat $STATS; 
+        cat $STATS;
         echo
     done
 
     echo "=== Train Stats ==="
 
     for STATS in $RESULT_DIR/$SCENE/stats/train*_rank0.json;
-    do  
+    do
         echo $STATS
-        cat $STATS; 
+        cat $STATS;
         echo
     done
 done

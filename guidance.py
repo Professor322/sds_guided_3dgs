@@ -2,22 +2,23 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
-from diffusers import DiffusionPipeline,  StableDiffusionPipeline, DDIMScheduler
+from diffusers import DiffusionPipeline, StableDiffusionPipeline, DDIMScheduler
 
 from transformers import T5EncoderModel
+
 
 class SDSLoss3DGS(torch.nn.Module):
     def __init__(self):
         super().__init__()
 
         # load the model
-        self.device = torch.device('cuda:0')
+        self.device = torch.device("cuda:0")
 
         # this is to make it work on the cluster as it does not have internet access to download the model
-        deepfloyd_sr_model_path = "/home/nskochetkov/.cache/huggingface/hub/models--DeepFloyd--IF-II-L-v1.0/snapshots/609476ce702b2d94aff7d1f944dcc54d4f972901" 
+        deepfloyd_sr_model_path = "/home/nskochetkov/.cache/huggingface/hub/models--DeepFloyd--IF-II-L-v1.0/snapshots/609476ce702b2d94aff7d1f944dcc54d4f972901"
         pipe = DiffusionPipeline.from_pretrained(
             deepfloyd_sr_model_path,
-            #text_encoder=None,
+            # text_encoder=None,
             safety_checker=None,
             watermarker=None,
             feature_extractor=None,
@@ -32,29 +33,35 @@ class SDSLoss3DGS(torch.nn.Module):
         self.alphas = self.scheduler.alphas_cumprod.to(self.device)
         self.prompt_embeddings = pipe.encode_prompt("")
 
-    @torch.amp.autocast('cuda', enabled=False)
+    @torch.amp.autocast("cuda", enabled=False)
     def forward_unet(self, latents, t, encoder_hidden_states, **kwargs):
         input_dtype = latents.dtype
         return self.unet(
             latents.to(torch.float16),
             t.to(torch.float16),
             encoder_hidden_states=encoder_hidden_states.to(torch.float16),
-            **kwargs
+            **kwargs,
         ).sample.to(input_dtype)
 
     def prepare_latents(self, images):
         resolution = (256, 256)
-        latents = F.interpolate(images, resolution, mode="bilinear", align_corners=False, antialias=True)
-        return 2. * latents - 1.
+        latents = F.interpolate(
+            images, resolution, mode="bilinear", align_corners=False, antialias=True
+        )
+        return 2.0 * latents - 1.0
 
     def prepare_downscaled_latents(self, images, lowres_noise_level):
-        downscaled = F.interpolate(images, (64, 64), mode="nearest")#, align_corners=False, antialias=True)
-        upscaled = F.interpolate(downscaled, (256, 256), mode="nearest")#, align_corners=True).detach()
-        upscaled = 2. * upscaled - 1.
+        downscaled = F.interpolate(
+            images, (64, 64), mode="nearest"
+        )  # , align_corners=False, antialias=True)
+        upscaled = F.interpolate(
+            downscaled, (256, 256), mode="nearest"
+        )  # , align_corners=True).detach()
+        upscaled = 2.0 * upscaled - 1.0
         upscaled = self.scheduler.add_noise(
             upscaled,
             torch.randn_like(upscaled),
-            torch.tensor(int(self.num_train_timesteps * lowres_noise_level))
+            torch.tensor(int(self.num_train_timesteps * lowres_noise_level)),
         )
         return upscaled
 
@@ -67,54 +74,61 @@ class SDSLoss3DGS(torch.nn.Module):
         )
 
         w = (1 - self.alphas[t]).view(-1, 1, 1, 1)
-        #w = w * (1 - w) ** 0.5
+        # w = w * (1 - w) ** 0.5
         grad = w * (noise_pred - noise)
         grad = torch.nan_to_num(grad)
         return grad
 
-
-    def forward(self, images, min_step=20, max_step=980, guidance_scale=10., lowres_noise_level=0.75, scheduler_timestep=None):
+    def forward(
+        self,
+        images,
+        min_step=20,
+        max_step=980,
+        guidance_scale=10.0,
+        lowres_noise_level=0.75,
+        scheduler_timestep=None,
+    ):
         # prepare images
         batch_size = images.shape[0]
         # positive and negative embeddings
-        batch_embeddings = [self.prompt_embeddings[0].repeat(batch_size, 1, 1),
-                            self.prompt_embeddings[1].repeat(batch_size, 1, 1)]
+        batch_embeddings = [
+            self.prompt_embeddings[0].repeat(batch_size, 1, 1),
+            self.prompt_embeddings[1].repeat(batch_size, 1, 1),
+        ]
 
         latents = self.prepare_latents(images)
 
         condition = images
         condition = self.prepare_downscaled_latents(condition, lowres_noise_level)
         noise_level = torch.full(
-                [2 * condition.shape[0]],
-                torch.tensor(int(self.num_train_timesteps * lowres_noise_level)),
-                device=condition.device
+            [2 * condition.shape[0]],
+            torch.tensor(int(self.num_train_timesteps * lowres_noise_level)),
+            device=condition.device,
         )
-        
+
         if scheduler_timestep is not None:
-            t = scheduler_timestep * torch.ones(batch_size, dtype=torch.long, device=self.device)
+            t = scheduler_timestep * torch.ones(
+                batch_size, dtype=torch.long, device=self.device
+            )
         else:
             # sample ts
             t = torch.randint(
-                min_step,
-                max_step,
-                [batch_size],
-                dtype=torch.long,
-                device=self.device
+                min_step, max_step, [batch_size], dtype=torch.long, device=self.device
             )
 
         # predict noise
         with torch.no_grad():
             noise = torch.randn_like(latents, device=self.device)
             latents_noisy = self.scheduler.add_noise(latents, noise, t)
-            
+
             latents_noisy = torch.cat([latents_noisy, condition], dim=1)
-            
+
             latents_noisy = self.scheduler.scale_model_input(latents_noisy, t)
             noise_pred = self.forward_unet(
                 torch.cat(2 * [latents_noisy]),
                 torch.cat(2 * [t]),
                 torch.cat(batch_embeddings),
-                class_labels=noise_level
+                class_labels=noise_level,
             )
         # convert noise prediction into gradient
         grad = self.construct_gradient(noise_pred, noise, t, guidance_scale)
@@ -123,23 +137,24 @@ class SDSLoss3DGS(torch.nn.Module):
         loss_sds = 0.5 * F.mse_loss(latents, target, reduction="sum") / batch_size
         return loss_sds
 
+
 class SDSLoss(torch.nn.Module):
-    def __init__(self, stage='ii'):
+    def __init__(self, stage="ii"):
         super().__init__()
 
         # load the model
-        self.device = torch.device('cuda:0')
+        self.device = torch.device("cuda:0")
         self.stage = stage
 
-        if stage == 'i':
+        if stage == "i":
             # deepfloyd_model = "DeepFloyd/IF-I-XL-v1.0"  # changed from XL
             deepfloyd_model = "/home/maliev/.cache/huggingface/hub/models--DeepFloyd--IF-I-XL-v1.0/snapshots/c03d510e9b75bce9f9db5bb85148c1402ad7e694/"
-        elif stage == 'ii':
-            deepfloyd_model = "DeepFloyd/IF-II-L-v1.0" 
-            #deepfloyd_model = "/home/maliev/.cache/huggingface/hub/models--DeepFloyd--IF-II-L-v1.0/snapshots/609476ce702b2d94aff7d1f944dcc54d4f972901/"
+        elif stage == "ii":
+            deepfloyd_model = "DeepFloyd/IF-II-L-v1.0"
+            # deepfloyd_model = "/home/maliev/.cache/huggingface/hub/models--DeepFloyd--IF-II-L-v1.0/snapshots/609476ce702b2d94aff7d1f944dcc54d4f972901/"
         else:
-            raise(NotImplementedError)
-            
+            raise (NotImplementedError)
+
         pipe = DiffusionPipeline.from_pretrained(
             deepfloyd_model,
             text_encoder=None,
@@ -156,30 +171,36 @@ class SDSLoss(torch.nn.Module):
         self.num_train_timesteps = self.scheduler.config.num_train_timesteps
         self.alphas = self.scheduler.alphas_cumprod.to(self.device)
 
-    @torch.amp.autocast('cuda', enabled=False)
+    @torch.amp.autocast("cuda", enabled=False)
     def forward_unet(self, latents, t, encoder_hidden_states, **kwargs):
         input_dtype = latents.dtype
         return self.unet(
             latents.to(torch.float16),
             t.to(torch.float16),
             encoder_hidden_states=encoder_hidden_states.to(torch.float16),
-            **kwargs
+            **kwargs,
         ).sample.to(input_dtype)
 
     def prepare_latents(self, images):
-        resolution = (64, 64) if self.stage == 'i' else (256, 256)
-        #resolution = (256, 256)
-        latents = F.interpolate(images, resolution, mode="bilinear", align_corners=False, antialias=True)
-        return 2. * latents - 1.
+        resolution = (64, 64) if self.stage == "i" else (256, 256)
+        # resolution = (256, 256)
+        latents = F.interpolate(
+            images, resolution, mode="bilinear", align_corners=False, antialias=True
+        )
+        return 2.0 * latents - 1.0
 
     def prepare_downscaled_latents(self, images, lowres_noise_level):
-        downscaled = F.interpolate(images, (64, 64), mode="nearest")#, align_corners=False, antialias=True)
-        upscaled = F.interpolate(downscaled, (256, 256), mode="nearest")#, align_corners=True).detach()
-        upscaled = 2. * upscaled - 1.
+        downscaled = F.interpolate(
+            images, (64, 64), mode="nearest"
+        )  # , align_corners=False, antialias=True)
+        upscaled = F.interpolate(
+            downscaled, (256, 256), mode="nearest"
+        )  # , align_corners=True).detach()
+        upscaled = 2.0 * upscaled - 1.0
         upscaled = self.scheduler.add_noise(
             upscaled,
             torch.randn_like(upscaled),
-            torch.tensor(int(self.num_train_timesteps * lowres_noise_level))
+            torch.tensor(int(self.num_train_timesteps * lowres_noise_level)),
         )
         return upscaled
 
@@ -192,46 +213,53 @@ class SDSLoss(torch.nn.Module):
         )
 
         w = (1 - self.alphas[t]).view(-1, 1, 1, 1)
-        #w = w * (1 - w) ** 0.5
+        # w = w * (1 - w) ** 0.5
         grad = w * (noise_pred - noise)
         grad = torch.nan_to_num(grad)
         return grad
 
-
-    def forward(self, images, prompt_embeddings, original=None, min_step=20, max_step=980, guidance_scale=10., lowres_noise_level=0.75, scheduler_timestep=None):
+    def forward(
+        self,
+        images,
+        prompt_embeddings,
+        original=None,
+        min_step=20,
+        max_step=980,
+        guidance_scale=10.0,
+        lowres_noise_level=0.75,
+        scheduler_timestep=None,
+    ):
         # prepare images
         batch_size = images.shape[0]
         latents = self.prepare_latents(images)
-        if self.stage == 'ii':
+        if self.stage == "ii":
             condition = images if original is None else original
             condition = self.prepare_downscaled_latents(condition, lowres_noise_level)
             noise_level = torch.full(
-                    [2 * condition.shape[0]],
-                    torch.tensor(int(self.num_train_timesteps * lowres_noise_level)),
-                    device=condition.device
+                [2 * condition.shape[0]],
+                torch.tensor(int(self.num_train_timesteps * lowres_noise_level)),
+                device=condition.device,
             )
-        
+
         if scheduler_timestep is not None:
-            t = scheduler_timestep * torch.ones(batch_size, dtype=torch.long, device=self.device)
+            t = scheduler_timestep * torch.ones(
+                batch_size, dtype=torch.long, device=self.device
+            )
         else:
             # sample ts
             t = torch.randint(
-                min_step,
-                max_step,
-                [batch_size],
-                dtype=torch.long,
-                device=self.device
+                min_step, max_step, [batch_size], dtype=torch.long, device=self.device
             )
 
         # predict noise
         with torch.no_grad():
             noise = torch.randn_like(latents, device=self.device)
             latents_noisy = self.scheduler.add_noise(latents, noise, t)
-            
-            if self.stage == 'ii':
+
+            if self.stage == "ii":
                 latents_noisy = torch.cat([latents_noisy, condition], dim=1)
             latents_noisy = self.scheduler.scale_model_input(latents_noisy, t)
-            if self.stage == 'i':
+            if self.stage == "i":
                 noise_pred = self.forward_unet(
                     torch.cat(2 * [latents_noisy]),
                     torch.cat(2 * [t]),
@@ -242,7 +270,7 @@ class SDSLoss(torch.nn.Module):
                     torch.cat(2 * [latents_noisy]),
                     torch.cat(2 * [t]),
                     torch.cat(prompt_embeddings),
-                    class_labels=noise_level
+                    class_labels=noise_level,
                 )
         # convert noise prediction into gradient
         grad = self.construct_gradient(noise_pred, noise, t, guidance_scale)
@@ -251,18 +279,18 @@ class SDSLoss(torch.nn.Module):
         loss_sds = 0.5 * F.mse_loss(latents, target, reduction="sum") / batch_size
         return loss_sds
 
+
 class SDSDSLoss(torch.nn.Module):
-    def __init__(self, input_type='rgb'):
+    def __init__(self, input_type="rgb"):
         super().__init__()
 
         # load the model
-        self.device = torch.device('cuda:0')
+        self.device = torch.device("cuda:0")
 
         model = "runwayml/stable-diffusion-v1-5"
-            
+
         pipe = StableDiffusionPipeline.from_pretrained(
-            model, 
-            torch_dtype=torch.float16
+            model, torch_dtype=torch.float16
         ).to(self.device)
 
         self.vae = pipe.vae.eval()
@@ -274,17 +302,19 @@ class SDSDSLoss(torch.nn.Module):
         self.input_type = input_type
         self.scheduler.set_timesteps(self.num_train_timesteps, device=self.device)
 
-    @torch.amp.autocast('cuda', enabled=False)
+    @torch.amp.autocast("cuda", enabled=False)
     def prepare_latents(self, images):
         resolution = (512, 512)
-        images = F.interpolate(images, resolution, mode="bilinear", align_corners=False, antialias=True)
-        images = 2. * images - 1.
+        images = F.interpolate(
+            images, resolution, mode="bilinear", align_corners=False, antialias=True
+        )
+        images = 2.0 * images - 1.0
         input_dtype = images.dtype
         posterior = self.vae.encode(images.to(torch.float16)).latent_dist
         latents = posterior.sample() * self.vae.config.scaling_factor
         return latents.to(input_dtype)
 
-    @torch.amp.autocast('cuda', enabled=False)
+    @torch.amp.autocast("cuda", enabled=False)
     def decode_latents(self, latents):
         input_dtype = latents.dtype
         latents = 1 / self.vae.config.scaling_factor * latents
@@ -292,7 +322,7 @@ class SDSDSLoss(torch.nn.Module):
         image = (image * 0.5 + 0.5).clamp(0, 1)
         return image.to(input_dtype)
 
-    @torch.amp.autocast('cuda', enabled=False)
+    @torch.amp.autocast("cuda", enabled=False)
     def forward_unet(self, latents, t, encoder_hidden_states, **kwargs):
         input_dtype = latents.dtype
         return self.unet(
@@ -302,22 +332,30 @@ class SDSDSLoss(torch.nn.Module):
             **kwargs,
         ).sample.to(input_dtype)
 
-    def forward(self, images, prompt_embeddings, original=None, min_step=20, max_step=980, guidance_scale=10., lowres_noise_level=0.75, scheduler_timestep=None):
+    def forward(
+        self,
+        images,
+        prompt_embeddings,
+        original=None,
+        min_step=20,
+        max_step=980,
+        guidance_scale=10.0,
+        lowres_noise_level=0.75,
+        scheduler_timestep=None,
+    ):
         # prepare images
         batch_size = images.shape[0]
-        if self.input_type != 'latent':
+        if self.input_type != "latent":
             latents = self.prepare_latents(images)
         else:
             latents = images
         if scheduler_timestep is not None:
-            t = scheduler_timestep * torch.ones(batch_size, dtype=torch.long, device=self.device)
+            t = scheduler_timestep * torch.ones(
+                batch_size, dtype=torch.long, device=self.device
+            )
         else:
             t = torch.randint(
-                min_step,
-                max_step,
-                [batch_size],
-                dtype=torch.long,
-                device=self.device
+                min_step, max_step, [batch_size], dtype=torch.long, device=self.device
             )
         # predict noise
         with torch.no_grad():
@@ -347,7 +385,7 @@ class SDSDSLoss(torch.nn.Module):
 
         grad = w * (noise_pred - noise)
         grad = torch.nan_to_num(grad)
-        #diff = noise_pred - noise
+        # diff = noise_pred - noise
         return grad
 
 
@@ -360,38 +398,38 @@ class SDILoss(SDSLoss):
         original=None,
         min_step=20,
         max_step=980,
-        guidance_scale=10.,
-        invert_guidance_scale=-10.,
+        guidance_scale=10.0,
+        invert_guidance_scale=-10.0,
         lowres_noise_level=0.75,
-        scheduler_timestep=None
+        scheduler_timestep=None,
     ):
         batch_size = images.shape[0]
         latents = self.prepare_latents(images)
-        
+
         if scheduler_timestep is not None:
-            t = scheduler_timestep * torch.ones(batch_size, dtype=torch.long, device=self.device)
+            t = scheduler_timestep * torch.ones(
+                batch_size, dtype=torch.long, device=self.device
+            )
         else:
             # sample ts
             t = torch.randint(
-                min_step,
-                max_step,
-                [batch_size],
-                dtype=torch.long,
-                device=self.device
+                min_step, max_step, [batch_size], dtype=torch.long, device=self.device
             )
-        
+
         # get noise:
         # 1. run inversion till t + delta_t
         # 2. how many steps? till what time points?
-        
+
         # predict noise
         with torch.no_grad():
-            #noise = torch.randn_like(latents, device=self.device)
-            noise = self.invert(latents, prompt_embeddings, t, guidance_scale=invert_guidance_scale)
+            # noise = torch.randn_like(latents, device=self.device)
+            noise = self.invert(
+                latents, prompt_embeddings, t, guidance_scale=invert_guidance_scale
+            )
             t_minus_tau = (t - 10).clamp(min=0)
             latents_noisy = self.scheduler.add_noise(latents, noise, t_minus_tau)
             latents_noisy = self.scheduler.scale_model_input(latents_noisy, t_minus_tau)
-            
+
             noise_pred = self.forward_unet(
                 torch.cat(2 * [latents_noisy]),
                 torch.cat(2 * [t_minus_tau]),
@@ -403,39 +441,44 @@ class SDILoss(SDSLoss):
         target = (latents - grad).detach()
         loss_sds = 0.5 * F.mse_loss(latents, target, reduction="sum") / batch_size
         return loss_sds
-    
+
     def invert(
         self,
         latents,
         prompt_embeddings,
         t,
         guidance_scale,
-        do_classifier_free_guidance=True
+        do_classifier_free_guidance=True,
     ):
         batch_size = latents.shape[0]
         # latents = latents.clone()
         # I assume all t's in batch are the same
         t = t[0].cpu().to(torch.int64).item()
         num_inference_steps = math.ceil(30 * t / 1000)
-        #print(f'input t is {t}, i will make {num_inference_steps} steps')
+        # print(f'input t is {t}, i will make {num_inference_steps} steps')
         timesteps = (
             np.linspace(0, t, num_inference_steps + 1)
-            .round()#[::-1]
+            .round()  # [::-1]
             .copy()
             .astype(np.int64)
         )
-        #print(timesteps)
+        # print(timesteps)
         # We'll keep a list of the inverted latents as the process goes on
         for i in range(0, num_inference_steps):
             next_t = timesteps[i + 1]
             current_t = timesteps[i]
             # Expand the latents if we are doing classifier free guidance
-            latent_model_input = torch.cat([latents] * 2) if do_classifier_free_guidance else latents
-            latent_model_input = self.scheduler.scale_model_input(latent_model_input, next_t)
+            latent_model_input = (
+                torch.cat([latents] * 2) if do_classifier_free_guidance else latents
+            )
+            latent_model_input = self.scheduler.scale_model_input(
+                latent_model_input, next_t
+            )
             # Predict the noise residual
             noise_pred = self.forward_unet(
                 latent_model_input,
-                next_t * torch.ones(2 * batch_size, dtype=torch.long, device=self.device),
+                next_t
+                * torch.ones(2 * batch_size, dtype=torch.long, device=self.device),
                 torch.cat(prompt_embeddings),
             )
             # Perform guidance
@@ -443,28 +486,33 @@ class SDILoss(SDSLoss):
                 noise_pred_text, noise_pred_uncond = noise_pred.chunk(2)
                 noise_pred_text, predicted_variance = noise_pred_text.split(3, dim=1)
                 noise_pred_uncond, _ = noise_pred_uncond.split(3, dim=1)
-                noise_pred = noise_pred_uncond + guidance_scale * (noise_pred_text - noise_pred_uncond)
+                noise_pred = noise_pred_uncond + guidance_scale * (
+                    noise_pred_text - noise_pred_uncond
+                )
 
-            #print(f'current t {current_t}\t next t {next_t}')
-            #print(f'noise pred computed with t={next_t}')
+            # print(f'current t {current_t}\t next t {next_t}')
+            # print(f'noise pred computed with t={next_t}')
             alpha_t = self.alphas[current_t]
             alpha_t_next = self.alphas[next_t]
             # Inverted update step (re-arranging the update step to get x(t) (new latents) as a function of x(t-1) (current latents)
-            latents = (
-                (latents - (1 - alpha_t).sqrt() * noise_pred) * (alpha_t_next.sqrt() / alpha_t.sqrt()) 
-                + (1 - alpha_t_next).sqrt() * noise_pred
-            )
+            latents = (latents - (1 - alpha_t).sqrt() * noise_pred) * (
+                alpha_t_next.sqrt() / alpha_t.sqrt()
+            ) + (1 - alpha_t_next).sqrt() * noise_pred
 
-        #return noise_pred + 0.3 * (1 - alpha_t_next).sqrt() * torch.randn_like(noise_pred)
+        # return noise_pred + 0.3 * (1 - alpha_t_next).sqrt() * torch.randn_like(noise_pred)
         return noise_pred
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     from prompt_processing import encode_prompt
+
     prompt = "orange backpack"
     prompt_embeddings = encode_prompt(prompt)
-    batch_embeddings = [prompt_embeddings[0].repeat(2, 1, 1),
-                        prompt_embeddings[1].repeat(2, 1, 1)]
+    batch_embeddings = [
+        prompt_embeddings[0].repeat(2, 1, 1),
+        prompt_embeddings[1].repeat(2, 1, 1),
+    ]
 
-    images = torch.rand(2, 3, 64, 64, device=torch.device('cuda:0'))
+    images = torch.rand(2, 3, 64, 64, device=torch.device("cuda:0"))
     loss = SDILoss()
     loss(images, batch_embeddings)

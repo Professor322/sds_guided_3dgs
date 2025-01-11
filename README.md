@@ -11,12 +11,12 @@ Arxiv reference: https://arxiv.org/abs/2409.06765
   During installation library will compile cuda kernels. If you hit any problems running out of CPU RAM try reducing `MAX_JOBS`.
 
 ## Notes on working with gsplat
-* As a base implementation I took code from `examples` directory and got rid of 
+* As a base implementation I took code from `examples` directory and got rid of
 * Tried to use gsplat to render scenes from NerF 360 data set - real time rendering works along with visualisation, checkpointing, validation
 
 ## Some thoughts
 * It seems like in the world of 3d rendering people are chasing training speed, rendering speed and quality. SDS will definetly decrease training speed.
-* If all goes well I think the code from this repo should be pushed as a pull request to gsplat library. 
+* If all goes well I think the code from this repo should be pushed as a pull request to gsplat library.
 * Beauty of 3D Gaussian splatting is that is start with small number of ellipsoids, so that not all GPU memory allocated in the beginning of the training <br>
   This allows to prototype on the low end PCs
 * Need to try different upscales of super resolution diffusion models
@@ -41,7 +41,7 @@ points mapped to train images
 python3 ./datasets/colmap.py --data_dir=data/360_v2/bicycle
 ```
 
-To train 
+To train
 ```
 CUDA_VISIBLE_DEVICES=0 python simple_trainer.py default --eval_steps -1 --disable_viewer --data_factor 2 \
     --render_traj_path "ellipse" \

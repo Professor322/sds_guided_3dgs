@@ -40,9 +40,11 @@ from gsplat.compression import PngCompression
 from gsplat.distributed import cli
 from gsplat.rendering import rasterization
 from gsplat.strategy import DefaultStrategy, MCMCStrategy
-#from gsplat.optimizers import SelectiveAdam
+
+# from gsplat.optimizers import SelectiveAdam
 
 from guidance import SDSLoss3DGS
+
 
 @dataclass
 class Config:
@@ -646,7 +648,7 @@ class Runner:
                 if max_steps - step == cfg.sds_loss:
                     print("Starting SDS loss")
                 # sds loss expects channels to be a second dimension
-                # permute [b, H, W, 3] -> [b, 3, H, W] 
+                # permute [b, H, W, 3] -> [b, 3, H, W]
                 sds_loss = self.sds_loss(colors.permute((0, 3, 1, 2)))
                 loss += sds_loss
             if cfg.depth_loss:

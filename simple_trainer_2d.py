@@ -11,6 +11,22 @@ from PIL import Image
 from torch import Tensor, optim
 
 from gsplat import rasterization, rasterization_2dgs
+from dataclasses import dataclass, field
+from typing import Dict, List, Optional, Tuple, Union
+from gsplat.distributed import cli
+
+
+@dataclass
+class Config:
+    width: int = 256
+    height: int = 256
+    num_points: int = 100_000
+    save_imgs: bool = True
+    iterations: int = 1_000
+    lr: float = 0.01
+    model_type: Literal["3dgs", "2dgs"] = "3dgs"
+    save_steps: List[int] = field(default_factory=lambda: [7_000, 30_000])
+    img_path: str = ""
 
 
 class SimpleTrainer:
@@ -159,31 +175,25 @@ def image_path_to_tensor(image_path: Path):
 
 
 def main(
-    height: int = 256,
-    width: int = 256,
-    num_points: int = 100000,
-    save_imgs: bool = True,
-    img_path: Optional[Path] = None,
-    iterations: int = 1000,
-    lr: float = 0.01,
-    model_type: Literal["3dgs", "2dgs"] = "3dgs",
+    cfg: Config,
 ) -> None:
-    if img_path:
-        gt_image = image_path_to_tensor(img_path)
+    if cfg.img_path:
+        gt_image = image_path_to_tensor(cfg.img_path)
     else:
-        gt_image = torch.ones((height, width, 3)) * 1.0
+        gt_image = torch.ones((cfg.height, cfg.width, 3)) * 1.0
         # make top left and bottom right red, blue
-        gt_image[: height // 2, : width // 2, :] = torch.tensor([1.0, 0.0, 0.0])
-        gt_image[height // 2 :, width // 2 :, :] = torch.tensor([0.0, 0.0, 1.0])
+        gt_image[: cfg.height // 2, : cfg.width // 2, :] = torch.tensor([1.0, 0.0, 0.0])
+        gt_image[cfg.height // 2 :, cfg.width // 2 :, :] = torch.tensor([0.0, 0.0, 1.0])
 
-    trainer = SimpleTrainer(gt_image=gt_image, num_points=num_points)
+    trainer = SimpleTrainer(gt_image=gt_image, num_points=cfg.num_points)
     trainer.train(
-        iterations=iterations,
-        lr=lr,
-        save_imgs=save_imgs,
-        model_type=model_type,
+        iterations=cfg.iterations,
+        lr=cfg.lr,
+        save_imgs=cfg.save_imgs,
+        model_type=cfg.model_type,
     )
 
 
 if __name__ == "__main__":
-    tyro.cli(main)
+    cfg = tyro.cli(Config)
+    main(cfg)
