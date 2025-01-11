@@ -13,7 +13,6 @@ from torch import Tensor, optim
 from gsplat import rasterization, rasterization_2dgs
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Tuple, Union
-from gsplat.distributed import cli
 
 
 @dataclass
@@ -45,6 +44,8 @@ class SimpleTrainer:
         self.device = torch.device("cuda:0")
         self.gt_image = gt_image.to(device=self.device)
         self.num_points = num_points
+        self.iter = 0
+        self.frames = []
         self.ckpt_dir = f"{results_dir}/ckpts"
         os.makedirs(self.ckpt_dir, exist_ok=True)
         # self.stats_dir = f"{results_dir}/stats"
@@ -70,13 +71,15 @@ class SimpleTrainer:
             self.optimizer.load_state_dict(self.optimizer_state_dict)
 
     def _load_gaussians(self, ckpt_path):
-        ckpt = torch.load(ckpt_path, weights_only=True)
+        ckpt = torch.load(ckpt_path, weights_only=False)
         print(f"Loading checkpoint {ckpt_path}")
         self.opacities = ckpt["opacities"]
         self.quats = ckpt["quats"]
         self.rgbs = ckpt["rgbs"]
         self.scales = ckpt["scales"]
         self.means = ckpt["means"]
+        self.iter = ckpt["iter"]
+        self.frames = ckpt["frames"]
 
         self.optimizer_state_dict = ckpt["optimizer"]
         self.viewmat = torch.tensor(
@@ -138,7 +141,7 @@ class SimpleTrainer:
         model_type: Literal["3dgs", "2dgs"] = "3dgs",
     ):
         mse_loss = torch.nn.MSELoss()
-        frames = []
+        frames = self.frames
         times = [0] * 2  # rasterization, backward
         K = torch.tensor(
             [
@@ -154,7 +157,9 @@ class SimpleTrainer:
         elif model_type == "2dgs":
             rasterize_fnc = rasterization_2dgs
 
-        for iter in range(iterations):
+        begin = self.iter
+        end = begin + iterations + 1
+        for iter in range(begin, end):
             start = time.time()
 
             renders = rasterize_fnc(
@@ -179,11 +184,11 @@ class SimpleTrainer:
             torch.cuda.synchronize()
             times[1] += time.time() - start
             self.optimizer.step()
-            print(f"Iteration {iter + 1}/{iterations}, Loss: {loss.item()}")
+            print(f"Iteration {iter + 1}/{end}, Loss: {loss.item()}")
 
             if save_imgs and iter % 50 == 0:
                 frames.append((out_img.detach().cpu().numpy() * 255).astype(np.uint8))
-            if iter in [i - 1 for i in cfg.save_steps] or iter == iterations - 1:
+            if iter in [i - 1 for i in cfg.save_steps] or iter == end - 1:
                 print(f"Saving checkpoint at: {iter}")
                 to_save = {
                     "optimizer": self.optimizer.state_dict(),
@@ -193,6 +198,7 @@ class SimpleTrainer:
                     "opacities": self.opacities,
                     "rgbs": self.rgbs,
                     "scales": self.scales,
+                    "frames": frames,
                 }
                 torch.save(to_save, f"{self.ckpt_dir}/ckpt_{iter}.pt")
 
