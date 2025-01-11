@@ -2,7 +2,7 @@
 ckpt*
 if_stage*
 data
-results
+results*
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
