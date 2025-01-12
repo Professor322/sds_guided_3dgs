@@ -207,8 +207,9 @@ class SimpleTrainer:
                     "scales": self.scales,
                     "frames": frames,
                 }
+                frame = (out_img.detach().cpu().numpy() * 255).astype(np.uint8)
                 # also save the last rendering
-                Image.fromarray(frames[-1]).save(f"{self.render_dir}/image_{iter}.png")
+                Image.fromarray(frame).save(f"{self.render_dir}/image_{iter}.png")
                 torch.save(to_save, f"{self.ckpt_dir}/ckpt_{iter}.pt")
                 with open(f"{self.stats_dir}/step{iter}.json", "w") as f:
                     json.dump({"psnr": psnr.item()}, f)
