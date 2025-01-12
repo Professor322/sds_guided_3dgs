@@ -649,7 +649,9 @@ class Runner:
                     print("Starting SDS loss")
                 # sds loss expects channels to be a second dimension
                 # permute [b, H, W, 3] -> [b, 3, H, W]
-                sds_loss = self.sds_loss(colors.permute((0, 3, 1, 2)))
+                sds_loss = self.sds_loss(
+                    colors.permute(0, 3, 1, 2), pixels.permute(0, 3, 1, 2)
+                )
                 loss += sds_loss
             if cfg.depth_loss:
                 # query depths from depth map

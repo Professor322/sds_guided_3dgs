@@ -1,6 +1,7 @@
 import math
 import os
 import time
+import json
 from pathlib import Path
 from typing import Literal, Optional
 
@@ -13,6 +14,7 @@ from torch import Tensor, optim
 from gsplat import rasterization, rasterization_2dgs
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Tuple, Union
+from torchmetrics.image import PeakSignalNoiseRatio, StructuralSimilarityIndexMeasure
 
 
 @dataclass
@@ -48,10 +50,12 @@ class SimpleTrainer:
         self.frames = []
         self.ckpt_dir = f"{results_dir}/ckpts"
         os.makedirs(self.ckpt_dir, exist_ok=True)
-        # self.stats_dir = f"{results_dir}/stats"
-        # os.makedirs(self.stats_dir, exist_ok=True)
-        # self.render_dir = f"{results_dir}/renders"
-        # os.makedirs(self.render_dir, exist_ok=True)
+        self.stats_dir = f"{results_dir}/stats"
+        os.makedirs(self.stats_dir, exist_ok=True)
+        self.render_dir = f"{results_dir}/renders"
+        os.makedirs(self.render_dir, exist_ok=True)
+
+        self.psnr = PeakSignalNoiseRatio(data_range=1.0).to(self.device)
 
         fov_x = math.pi / 2.0
         self.H, self.W = gt_image.shape[0], gt_image.shape[1]
@@ -184,7 +188,10 @@ class SimpleTrainer:
             torch.cuda.synchronize()
             times[1] += time.time() - start
             self.optimizer.step()
-            print(f"Iteration {iter + 1}/{end}, Loss: {loss.item()}")
+            psnr = self.psnr(out_img, self.gt_image)
+            print(
+                f"Iteration {iter + 1}/{end}, Loss: {loss.item()}, PSNR: {psnr.item()}"
+            )
 
             if save_imgs and iter % 50 == 0:
                 frames.append((out_img.detach().cpu().numpy() * 255).astype(np.uint8))
@@ -200,15 +207,17 @@ class SimpleTrainer:
                     "scales": self.scales,
                     "frames": frames,
                 }
+                # also save the last rendering
+                Image.fromarray(frames[-1]).save(f"{self.render_dir}/image_{iter}.png")
                 torch.save(to_save, f"{self.ckpt_dir}/ckpt_{iter}.pt")
+                with open(f"{self.stats_dir}/step{iter}.json", "w") as f:
+                    json.dump({"psnr": psnr.item()}, f)
 
         if save_imgs:
             # save them as a gif with PIL
             frames = [Image.fromarray(frame) for frame in frames]
-            out_dir = os.path.join(os.getcwd(), "results")
-            os.makedirs(out_dir, exist_ok=True)
             frames[0].save(
-                f"{out_dir}/training.gif",
+                f"{self.render_dir}/training.gif",
                 save_all=True,
                 append_images=frames[1:],
                 optimize=False,
