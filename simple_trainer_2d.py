@@ -136,6 +136,19 @@ class SimpleTrainer:
                 self.one_image_dataset, batch_size=cfg.batch_size, num_workers=0
             )
         self.mse_loss = torch.nn.MSELoss()
+        if self.cfg.use_noise_scheduler:
+            self.noise_scheduler = self.set_linear_time_strategy(
+                self.cfg.iterations, self.cfg.min_noise_step, self.cfg.max_noise_step
+            )
+
+    def set_linear_time_strategy(
+        self, output_shape, min_diffusion_steps=20, max_diffusion_steps=980
+    ):
+        return (
+            torch.linspace(min_diffusion_steps, max_diffusion_steps, output_shape)
+            .flip(0)
+            .to(torch.long)
+        )
 
     def _load_gaussians(self, ckpt_path):
         ckpt = torch.load(ckpt_path, weights_only=False)
@@ -234,7 +247,7 @@ class SimpleTrainer:
         psnrs = []
         grad_norms = []
         self.one_image_dataset.img = self.one_image_dataset.img.to(self.device)
-        scheduler_timestep = None
+
         for i in range(begin, end):
             start = time.time()
 
@@ -270,7 +283,9 @@ class SimpleTrainer:
                     min_step=self.cfg.min_noise_step,
                     max_step=self.cfg.max_noise_step,
                     lowres_noise_level=self.cfg.lowres_noise_level,
-                    scheduler_timestep=scheduler_timestep,
+                    scheduler_timestep=self.noise_scheduler[i]
+                    if self.cfg.use_noise_scheduler
+                    else None,
                 )
 
             if self.cfg.use_fused_loss and self.cfg.use_sds_loss:
@@ -347,6 +362,7 @@ class SimpleTrainer:
                         dpi=300,
                         bbox_inches="tight",
                     )
+                    plt.close(fig)
                 if self.cfg.save_imgs:
                     frames.append(pred)
             if i in [idx - 1 for idx in self.cfg.save_steps] or i == end - 1:
