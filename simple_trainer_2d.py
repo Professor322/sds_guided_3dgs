@@ -241,14 +241,14 @@ class SimpleTrainer:
         elif self.cfg.model_type == "2dgs":
             rasterize_fnc = rasterization_2dgs
 
-        begin = self.iter
-        end = begin + self.cfg.iterations
+        # begin = self.iter
+        # end = begin + self.cfg.iterations
         losses = []
         psnrs = []
         grad_norms = []
         self.one_image_dataset.img = self.one_image_dataset.img.to(self.device)
 
-        for i in range(begin, end):
+        for i in range(self.cfg.iterations):
             start = time.time()
 
             renders = rasterize_fnc(
