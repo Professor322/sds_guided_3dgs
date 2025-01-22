@@ -57,6 +57,7 @@ class Config:
     # linearly changing applied noise
     use_noise_scheduler: bool = False
     show_plots: bool = False
+    current_rendering_as_condition: bool = False
 
 
 class OneImageDataset(Dataset):
@@ -261,11 +262,11 @@ class SimpleTrainer:
                 # H, W, C -> C, H, W
                 self.dataloader.dataset.training_img = out_img.permute(2, 0, 1)
                 pred, real = next(iter(self.dataloader))
-                pred = pred.to(self.device)
-                real = real.to(self.device)
+                pred = pred.to(self.device).permute(0, 3, 1, 2)
+                real = real.to(self.device).permute(0, 3, 1, 2)
                 sds = self.sds_loss(
-                    images=pred.permute(0, 3, 1, 2),
-                    original=real.permute(0, 3, 1, 2),
+                    images=pred,
+                    original=pred if self.cfg.current_rendering_as_condition else real,
                     min_step=self.cfg.min_noise_step,
                     max_step=self.cfg.max_noise_step,
                     lowres_noise_level=self.cfg.lowres_noise_level,
