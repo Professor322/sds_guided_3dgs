@@ -286,10 +286,9 @@ class SimpleTrainer:
             times[1] += time.time() - start
             self.optimizer.step()
             psnr = self.psnr(out_img, self.one_image_dataset.img.permute(1, 2, 0))
-            grad_norm = self.calculate_grad_norm()
             losses.append(loss.item())
             psnrs.append(psnr.item())
-            grad_norms.append(grad_norm.item())
+            grad_norms.append(self.calculate_grad_norm())
             print(f"Iteration {i + 1}/{end}, Loss: {loss.item()}, PSNR: {psnr.item()}")
 
             if i % self.cfg.show_steps == 0:
