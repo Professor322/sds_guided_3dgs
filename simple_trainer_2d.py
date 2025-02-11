@@ -58,6 +58,7 @@ class Config:
     use_noise_scheduler: bool = False
     show_plots: bool = False
     base_render_as_cond: bool = False
+    use_lr_scheduler: bool = False
 
 
 class OneImageDataset(Dataset):
@@ -139,6 +140,11 @@ class SimpleTrainer:
         if self.cfg.use_noise_scheduler:
             self.noise_scheduler = self.set_linear_time_strategy(
                 self.cfg.iterations, self.cfg.min_noise_step, self.cfg.max_noise_step
+            )
+        self.lr_scheduler = None
+        if self.cfg.use_lr_scheduler:
+            self.lr_scheduler = torch.optim.lr_scheduler.OneCycleLR(
+                optimizer=self.optimizer, epochs=self.cfg.iterations, max_lr=0.01
             )
 
     def set_linear_time_strategy(
@@ -246,6 +252,7 @@ class SimpleTrainer:
         losses = []
         psnrs = []
         grad_norms = []
+        learning_rates = []
         self.one_image_dataset.img = self.one_image_dataset.img.to(self.device)
 
         base_render = None
@@ -306,10 +313,16 @@ class SimpleTrainer:
             torch.cuda.synchronize()
             times[1] += time.time() - start
             self.optimizer.step()
+            if self.lr_scheduler is not None:
+                self.lr_scheduler.step()
+
             psnr = self.psnr(out_img, self.one_image_dataset.img.permute(1, 2, 0))
+            # stats
             losses.append(loss.item())
             psnrs.append(psnr.item())
             grad_norms.append(self.calculate_grad_norm())
+            learning_rates.append(self.optimizer.param_groups[0]["lr"])
+
             print(f"Iteration {i + 1}/{end}, Loss: {loss.item()}, PSNR: {psnr.item()}")
 
             if i % self.cfg.show_steps == 0:
@@ -322,7 +335,7 @@ class SimpleTrainer:
                 pred = (pred.detach().cpu().numpy() * 255).astype(np.uint8)
 
                 # Create the figure with an additional row for the new plot
-                fig, axes = plt.subplots(3, 2, figsize=(12, 15))
+                fig, axes = plt.subplots(4, 2, figsize=(12, 20))
 
                 # Plot 1: Original Image
                 axes[0, 0].imshow(orig)
@@ -362,7 +375,18 @@ class SimpleTrainer:
                 axes[2, 1].imshow(base_render_rgb)
                 axes[2, 1].set_title("Base Render from Start of Training")
                 axes[2, 1].axis("off")
+
+                # Plot 7: Learning Rate Evolution
+                axes[3, 0].plot(learning_rates, label="Learning Rate", color="green")
+                axes[3, 0].set_title("Learning Rate Evolution")
+                axes[3, 0].set_xlabel("Epoch")
+                axes[3, 0].set_ylabel("Learning Rate")
+                axes[3, 0].grid(True)
+                axes[3, 0].legend()
+
+                # Adjust layout
                 plt.tight_layout()
+
                 if self.cfg.show_plots:
                     plt.show()
                 else:
