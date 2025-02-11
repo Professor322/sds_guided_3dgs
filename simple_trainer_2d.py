@@ -40,7 +40,7 @@ class Config:
     img_path: str = ""
     ckpt_path: str = ""
     results_dir: str = "results_2d"
-    show_steps: int = 10
+    show_steps: int = 50
     use_sds_loss: bool = False
     use_fused_loss: bool = False
     lmbd: float = 1.0
@@ -57,7 +57,7 @@ class Config:
     # linearly changing applied noise
     use_noise_scheduler: bool = False
     show_plots: bool = False
-    current_rendering_as_condition: bool = False
+    base_render_as_cond: bool = False
 
 
 class OneImageDataset(Dataset):
@@ -248,6 +248,8 @@ class SimpleTrainer:
         grad_norms = []
         self.one_image_dataset.img = self.one_image_dataset.img.to(self.device)
 
+        base_render = None
+
         for i in range(begin, end):
             start = time.time()
 
@@ -264,6 +266,9 @@ class SimpleTrainer:
                 packed=False,
             )[0]
             out_img = renders[0]
+            if base_render is None:
+                base_render = out_img.detach().clone()
+
             torch.cuda.synchronize()
             times[0] += time.time() - start
             # calculate loss
@@ -279,7 +284,7 @@ class SimpleTrainer:
                 real = real.to(self.device).permute(0, 3, 1, 2)
                 sds = self.sds_loss(
                     images=pred,
-                    original=pred if self.cfg.current_rendering_as_condition else real,
+                    original=base_render if self.cfg.base_render_as_cond else real,
                     min_step=self.cfg.min_noise_step,
                     max_step=self.cfg.max_noise_step,
                     lowres_noise_level=self.cfg.lowres_noise_level,
@@ -310,12 +315,13 @@ class SimpleTrainer:
             if i % self.cfg.show_steps == 0:
                 if self.cfg.show_plots:
                     clear_output(wait=True)
-                pred = (out_img.detach().cpu().numpy() * 255).astype(np.uint8)
-                orig = (
-                    self.one_image_dataset.img.permute(1, 2, 0).detach().cpu().numpy()
-                    * 255
-                ).astype(np.uint8)
-                # Create the figure with additional row for gradient norm plot
+                base_render_rgb = (base_render.detach().cpu().numpy() * 255).astype(
+                    np.uint8
+                )  # Modify as needed
+                orig = (orig.detach().cpu().numpy() * 255).astype(np.uint8)
+                pred = (pred.detach().cpu().numpy() * 255).astype(np.uint8)
+
+                # Create the figure with an additional row for the new plot
                 fig, axes = plt.subplots(3, 2, figsize=(12, 15))
 
                 # Plot 1: Original Image
@@ -352,8 +358,11 @@ class SimpleTrainer:
                 axes[2, 0].grid(True)
                 axes[2, 0].legend()
 
-                # Hide the last unused subplot (bottom-right corner)
+                # Plot 6: Base Render Image
+                axes[2, 1].imshow(base_render_rgb)
+                axes[2, 1].set_title("Base Render from Start of Training")
                 axes[2, 1].axis("off")
+                plt.tight_layout()
                 if self.cfg.show_plots:
                     plt.show()
                 else:
@@ -364,12 +373,13 @@ class SimpleTrainer:
                     )
                     plt.close(fig)
                 if self.cfg.save_imgs:
-                    frames.append(pred)
+                    frame = (out_img.detach().cpu().numpy() * 255).astype(np.uint8)
+                    Image.fromarray(frame).save(f"{self.render_dir}/image_{i}.png")
             if i in [idx - 1 for idx in self.cfg.save_steps] or i == end - 1:
                 print(f"Saving checkpoint at: {i}")
                 to_save = {
                     "optimizer": self.optimizer.state_dict(),
-                    "iter": iter,
+                    "iter": i,
                     "means": self.means,
                     "quats": self.quats,
                     "opacities": self.opacities,
@@ -384,17 +394,6 @@ class SimpleTrainer:
                 with open(f"{self.stats_dir}/step{i}.json", "w") as f:
                     json.dump({"psnr": psnr.item()}, f)
 
-        if self.cfg.save_imgs:
-            # save them as a gif with PIL
-            frames = [Image.fromarray(frame) for frame in frames]
-            frames[0].save(
-                f"{self.render_dir}/training.gif",
-                save_all=True,
-                append_images=frames[1:],
-                optimize=False,
-                duration=5,
-                loop=0,
-            )
         print(f"Total(s):\nRasterization: {times[0]:.3f}, Backward: {times[1]:.3f}")
         print(
             f"Per step(s):\nRasterization: {times[0]/self.cfg.iterations:.5f}, Backward: {times[1]/self.cfg.iterations:.5f}"
