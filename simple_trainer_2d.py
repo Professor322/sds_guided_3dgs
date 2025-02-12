@@ -281,6 +281,7 @@ class SimpleTrainer:
             out_img = renders[0]
             if base_render is None:
                 base_render = out_img.detach().clone()
+                base_render.requires_grad = True
 
             torch.cuda.synchronize()
             times[0] += time.time() - start
