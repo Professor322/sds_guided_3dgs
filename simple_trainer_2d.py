@@ -65,7 +65,13 @@ class Config:
 
 class OneImageDataset(Dataset):
     def __init__(
-        self, image_path, patch_size=64, dataset_len=1000, resize=True, train=True
+        self,
+        image_path,
+        patch_size=64,
+        dataset_len=1000,
+        resize=True,
+        train=True,
+        use_generated_img=False,
     ):
         super().__init__()
         self.train = train
@@ -78,6 +84,8 @@ class OneImageDataset(Dataset):
         self.img = to_tensor(self.img)
         self.patch_size = patch_size
         self.training_img = None
+        self.generated_img = None
+        self.use_generated_img = use_generated_img
 
     def __getitem__(self, idx):
         # C, H, W -> H, W, C
@@ -85,7 +93,8 @@ class OneImageDataset(Dataset):
             self.img, output_size=(self.patch_size, self.patch_size)
         )
         if self.train:
-            patch_real = VF.crop(self.img, i, j, h, w).permute(1, 2, 0)
+            img = self.img if not self.use_generated_img else self.generated_img
+            patch_real = VF.crop(img, i, j, h, w).permute(1, 2, 0)
             patch_pred = VF.crop(self.training_img, i, j, h, w).permute(1, 2, 0)
             return patch_pred, patch_real
         # training img already in correct shape
@@ -293,7 +302,8 @@ class SimpleTrainer:
             if self.cfg.use_sds_loss:
                 # H, W, C -> C, H, W
                 if self.cfg.base_render_as_cond:
-                    self.dataloader.dataset.img = base_render.permute(2, 0, 1)
+                    self.dataloader.dataset.generated_img = base_render.permute(2, 0, 1)
+                    self.dataloader.dataset.use_generated_img = True
                 self.dataloader.dataset.training_img = out_img.permute(2, 0, 1)
                 pred, real = next(iter(self.dataloader))
                 pred = pred.to(self.device).permute(0, 3, 1, 2)
