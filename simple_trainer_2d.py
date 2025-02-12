@@ -20,7 +20,7 @@ import os
 from IPython.display import display, clear_output
 import torch.nn.functional as F
 from diffusers import DiffusionPipeline
-from guidance import SDSLoss3DGS
+from guidance import SDSLoss3DGS, SDILoss3DGS
 from torch.utils.data import Dataset, DataLoader
 import torchvision.transforms as transforms
 import torchvision.transforms.functional as VF
@@ -36,12 +36,13 @@ class Config:
     iterations: int = 1_000
     lr: float = 0.01
     model_type: Literal["3dgs", "2dgs"] = "3dgs"
-    save_steps: List[int] = field(default_factory=lambda: [7_000, 30_000])
+    save_steps: List[int] = field(default_factory=lambda: [1_000, 3_000, 7_000, 30_000])
     img_path: str = ""
     ckpt_path: str = ""
     results_dir: str = "results_2d"
     show_steps: int = 50
     use_sds_loss: bool = False
+    use_sdi_loss: bool = False
     use_fused_loss: bool = False
     lmbd: float = 1.0
     save_images: bool = False
@@ -142,8 +143,8 @@ class SimpleTrainer:
 
         if self.cfg.ckpt_path:
             self.optimizer.load_state_dict(self.optimizer_state_dict)
-        if self.cfg.use_sds_loss:
-            self.sds_loss = SDSLoss3DGS()
+        if self.cfg.use_sds_loss or self.cfg.use_sdi_loss:
+            self.sds_loss = SDSLoss3DGS() if self.cfg.use_sds_loss else SDILoss3DGS()
             self.dataloader = DataLoader(
                 self.one_image_dataset, batch_size=cfg.batch_size, num_workers=0
             )
@@ -155,7 +156,9 @@ class SimpleTrainer:
         self.lr_scheduler = None
         if self.cfg.use_lr_scheduler:
             self.lr_scheduler = torch.optim.lr_scheduler.OneCycleLR(
-                optimizer=self.optimizer, total_steps=self.cfg.iterations, max_lr=0.01
+                optimizer=self.optimizer,
+                total_steps=self.cfg.iterations,
+                max_lr=self.cfg.lr,
             )
 
     def set_linear_time_strategy(
@@ -299,7 +302,7 @@ class SimpleTrainer:
                 out_img, self.one_image_dataset.img.permute(1, 2, 0)
             )
 
-            if self.cfg.use_sds_loss:
+            if self.cfg.use_sds_loss or self.cfg.use_sdi_loss:
                 # H, W, C -> C, H, W
                 if self.cfg.base_render_as_cond:
                     self.dataloader.dataset.generated_img = base_render.permute(2, 0, 1)
@@ -325,9 +328,11 @@ class SimpleTrainer:
                     else None,
                 )
 
-            if self.cfg.use_fused_loss and self.cfg.use_sds_loss:
+            if self.cfg.use_fused_loss and (
+                self.cfg.use_sds_loss or self.cfg.use_sdi_loss
+            ):
                 loss = mse_loss + sds
-            elif self.cfg.use_sds_loss:
+            elif self.cfg.use_sds_loss or self.cfg.use_sdi_loss:
                 loss = sds
             else:
                 loss = mse_loss

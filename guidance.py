@@ -139,6 +139,121 @@ class SDSLoss3DGS(torch.nn.Module):
         return loss_sds
 
 
+class SDILoss3DGS(SDSLoss3DGS):
+    def forward(
+        self,
+        images,
+        original=None,
+        min_step=20,
+        max_step=980,
+        guidance_scale=10.0,
+        lowres_noise_level=0.75,
+        scheduler_timestep=None,
+        stochastic_inversion=True,
+        clip_x0=True,
+    ):
+        # prepare images
+        batch_size = images.shape[0]
+        # positive and negative embeddings
+        batch_embeddings = [
+            self.prompt_embeddings[0].repeat(batch_size, 1, 1),
+            self.prompt_embeddings[1].repeat(batch_size, 1, 1),
+        ]
+
+        self.lowres_noise_level = lowres_noise_level
+        self.stochastic_inversion = stochastic_inversion
+        self.clip_x0 = clip_x0
+        latents = self.prepare_latents(images)
+
+        if scheduler_timestep is not None:
+            t = scheduler_timestep * torch.ones(1, dtype=torch.long, device=self.device)
+        else:
+            # sample ts
+            t = torch.randint(
+                min_step,
+                max_step,
+                [
+                    1,
+                ],
+                dtype=torch.long,
+                device=self.device,
+            )
+
+        # predict noise
+        with torch.no_grad():
+            noise = torch.randn_like(latents, device=self.device)
+            latents_noisy = self.scheduler.add_noise(latents, noise, t)
+            noise_pred = self.predict_noise(
+                latents_noisy,
+                t,
+                batch_embeddings,
+                original=original,
+                guidance_scale=guidance_scale,
+                lowres_noise_level=lowres_noise_level,
+            )
+            latents_denoised = self.get_x0(latents_noisy, noise_pred, t)
+
+        w = ((1 - self.alphas[t]) * self.alphas[t]).sqrt().view(-1, 1, 1, 1)
+        self.debugging_stuff = {
+            "latents": latents.detach(),
+            "noise": noise.detach(),
+            "latents_noisy": latents_noisy.detach(),
+            "latents_denoised": latents_denoised.detach(),
+            "t": t,
+        }
+        # TODO: This w leads to vanilla SDS. We can try other weighting strategies to improve the results.
+        loss_sds = (
+            0.5
+            * w
+            * F.mse_loss(latents, latents_denoised, reduction="sum")
+            / batch_size
+        )
+        return loss_sds
+
+    def predict_noise(
+        self,
+        latents_noisy,
+        current_t,
+        prompt_embeddings,
+        original,
+        guidance_scale,
+        lowres_noise_level,
+    ):
+        # Expand the latents if we are doing classifier free guidance
+        batch_size = latents_noisy.shape[0]
+        # TODO: hardcoded stuff
+        condition = original
+        condition = self.prepare_downscaled_latents(condition, lowres_noise_level)
+        condition = self.scheduler.scale_model_input(
+            condition, current_t
+        )  # here i changed from next_t to current_t
+        noise_level = torch.full(
+            [2 * condition.shape[0]],
+            torch.tensor(int(self.num_train_timesteps * lowres_noise_level)),
+            device=condition.device,
+        )
+        latents_noisy = torch.cat([latents_noisy, condition], dim=1)
+        latent_model_input = torch.cat([latents_noisy] * 2)
+        latent_model_input = self.scheduler.scale_model_input(
+            latent_model_input, current_t
+        )  # here i changed from next_t to current_t
+        noise_pred = self.forward_unet(
+            latent_model_input,
+            current_t
+            * torch.ones(2 * batch_size, dtype=torch.long, device=self.device),
+            torch.cat(prompt_embeddings),
+            class_labels=noise_level,
+        )
+        # classifier guidance:
+        noise_pred_text, noise_pred_uncond = noise_pred.chunk(2)
+        noise_pred_text, predicted_variance = noise_pred_text.split(3, dim=1)
+        noise_pred_uncond, _ = noise_pred_uncond.split(3, dim=1)
+        noise_pred = noise_pred_uncond + guidance_scale * (
+            noise_pred_text - noise_pred_uncond
+        )
+        return noise_pred
+
+
 class SDSLoss(torch.nn.Module):
     def __init__(self, stage="ii"):
         super().__init__()
