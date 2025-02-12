@@ -292,11 +292,9 @@ class SimpleTrainer:
 
             if self.cfg.use_sds_loss:
                 # H, W, C -> C, H, W
-                self.dataloader.dataset.training_img = (
-                    base_render.permute(2, 0, 1)
-                    if self.cfg.base_render_as_cond
-                    else out_img.permute(2, 0, 1)
-                )
+                if self.cfg.base_render_as_cond:
+                    self.dataloader.dataset.img = base_render.permute(2, 0, 1)
+                self.dataloader.dataset.training_img = out_img.permute(2, 0, 1)
                 pred, real = next(iter(self.dataloader))
                 pred = pred.to(self.device).permute(0, 3, 1, 2)
                 real = real.to(self.device).permute(0, 3, 1, 2)
