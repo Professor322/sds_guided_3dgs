@@ -56,6 +56,8 @@ class Config:
     # instead randomly sampling noise we can
     # linearly changing applied noise
     use_noise_scheduler: bool = False
+    # this one will gradually collaps t_min and t_max
+    collapsing_noise_scheduler: bool = False
     show_plots: bool = False
     base_render_as_cond: bool = False
     use_lr_scheduler: bool = False
@@ -155,6 +157,10 @@ class SimpleTrainer:
             .flip(0)
             .to(torch.long)
         )
+
+    def compute_step(self, min_step, max_step, iter_frac):
+        step = max_step - (max_step - min_step) * math.sqrt(iter_frac)
+        return int(step)
 
     def _load_gaussians(self, ckpt_path):
         ckpt = torch.load(ckpt_path, weights_only=False)
@@ -293,11 +299,17 @@ class SimpleTrainer:
                 pred, real = next(iter(self.dataloader))
                 pred = pred.to(self.device).permute(0, 3, 1, 2)
                 real = real.to(self.device).permute(0, 3, 1, 2)
+                if self.cfg.collapsing_noise_scheduler:
+                    min_step = self.compute_step(200, 300, i / self.cfg.iterations)
+                    max_step = self.compute_step(500, 980, i / self.cfg.iterations)
+                else:
+                    min_step = self.cfg.min_noise_step
+                    max_step = self.cfg.max_noise_step
                 sds = self.sds_loss(
                     images=pred,
                     original=real,
-                    min_step=self.cfg.min_noise_step,
-                    max_step=self.cfg.max_noise_step,
+                    min_step=min_step,
+                    max_step=max_step,
                     lowres_noise_level=self.cfg.lowres_noise_level,
                     scheduler_timestep=self.noise_scheduler[i]
                     if self.cfg.use_noise_scheduler
