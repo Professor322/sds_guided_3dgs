@@ -347,9 +347,12 @@ class SimpleTrainer:
                     clear_output(wait=True)
                 base_render_rgb = (base_render.detach().cpu().numpy() * 255).astype(
                     np.uint8
-                )  # Modify as needed
-                orig = (orig.detach().cpu().numpy() * 255).astype(np.uint8)
-                pred = (pred.detach().cpu().numpy() * 255).astype(np.uint8)
+                )
+                pred = (out_img.detach().cpu().numpy() * 255).astype(np.uint8)
+                orig = (
+                    self.one_image_dataset.img.permute(1, 2, 0).detach().cpu().numpy()
+                    * 255
+                ).astype(np.uint8)
 
                 # Create the figure with an additional row for the new plot
                 fig, axes = plt.subplots(4, 2, figsize=(12, 20))
