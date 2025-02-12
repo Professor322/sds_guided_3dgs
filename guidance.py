@@ -210,6 +210,16 @@ class SDILoss3DGS(SDSLoss3DGS):
         )
         return loss_sds
 
+    def get_x0(self, original_samples, noise_pred, t):
+        alpha_prod_t = self.alphas[t]
+        beta_prod_t = 1 - alpha_prod_t
+        x0 = (original_samples - noise_pred * beta_prod_t ** (0.5)) / (
+            alpha_prod_t ** (0.5)
+        )
+        if self.clip_x0:
+            x0 = x0.clamp(-1.0, 1.0)
+        return x0
+
     def predict_noise(
         self,
         latents_noisy,
