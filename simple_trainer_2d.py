@@ -144,7 +144,7 @@ class SimpleTrainer:
         self.lr_scheduler = None
         if self.cfg.use_lr_scheduler:
             self.lr_scheduler = torch.optim.lr_scheduler.OneCycleLR(
-                optimizer=self.optimizer, epochs=self.cfg.iterations, max_lr=0.01
+                optimizer=self.optimizer, total_steps=self.cfg.iterations, max_lr=0.01
             )
 
     def set_linear_time_strategy(
