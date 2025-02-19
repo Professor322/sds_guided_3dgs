@@ -159,6 +159,7 @@ class SimpleTrainer:
                 optimizer=self.optimizer,
                 total_steps=self.cfg.iterations,
                 max_lr=self.cfg.lr,
+                pct_start=0.5,
             )
 
     def set_linear_time_strategy(
