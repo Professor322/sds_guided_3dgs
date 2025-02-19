@@ -62,6 +62,7 @@ class Config:
     show_plots: bool = False
     base_render_as_cond: bool = False
     use_lr_scheduler: bool = False
+    downscale_condition: bool = False
 
 
 class OneImageDataset(Dataset):
@@ -327,6 +328,7 @@ class SimpleTrainer:
                     scheduler_timestep=self.noise_scheduler[i]
                     if self.cfg.use_noise_scheduler
                     else None,
+                    downscale_condition=cfg.downscale_condition,
                 )
 
             if self.cfg.use_fused_loss and (

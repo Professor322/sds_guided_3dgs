@@ -50,10 +50,11 @@ class SDSLoss3DGS(torch.nn.Module):
         )
         return 2.0 * latents - 1.0
 
-    def prepare_downscaled_latents(self, images, lowres_noise_level):
-        # downscaled = F.interpolate(
-        #    images, (64, 64), mode="nearest"
-        # )  # , align_corners=False, antialias=True)
+    def prepare_downscaled_latents(self, images, lowres_noise_level, downscale=False):
+        if downscale:
+            images = F.interpolate(
+                images, (64, 64), mode="nearest"
+            )  # , align_corners=False, antialias=True)
         upscaled = F.interpolate(
             images, (256, 256), mode="nearest"
         )  # , align_corners=True).detach()
@@ -88,6 +89,7 @@ class SDSLoss3DGS(torch.nn.Module):
         guidance_scale=10.0,
         lowres_noise_level=0.75,
         scheduler_timestep=None,
+        downscale_condition=False,
     ):
         # prepare images
         batch_size = images.shape[0]
@@ -100,7 +102,9 @@ class SDSLoss3DGS(torch.nn.Module):
         latents = self.prepare_latents(images)
 
         condition = original
-        condition = self.prepare_downscaled_latents(condition, lowres_noise_level)
+        condition = self.prepare_downscaled_latents(
+            condition, lowres_noise_level, downscale=downscale_condition
+        )
         noise_level = torch.full(
             [2 * condition.shape[0]],
             torch.tensor(int(self.num_train_timesteps * lowres_noise_level)),
