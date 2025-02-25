@@ -59,10 +59,23 @@ def main(
         f"--max-noise-step {MAX_STEP}",
         f"--min-noise-step {MIN_STEP}",
         f"--ckpt-path {CHECKPOINT_PATH}",
-        f"--batch-size {BATCH_SIZE}" "--use-sds-loss",
+        f"--batch-size {BATCH_SIZE}",
+        "--use-sds-loss",
     ]
-
-    # adjust result dir name
+    # just noise levels
+    for noise_level in noise_levels:
+        current_run_args = default_run_args.copy()
+        result_dir = f"results_2d_low_res_noise_level_{str(noise_level).replace('.', '_')}_{CHECKPOINT}"
+        if cfg.base_render_as_cond:
+            current_run_args.append(" --base-render-as-cond")
+            result_dir += "_base_render_as_cond"
+        current_run_args.append(f"--results-dir {result_dir}")
+        if DEBUG:
+            print(SBATCH_TEMPLATE + "\n" + " ".join(current_run_args))
+        with open(SBATCH_FILENAME, "w") as file:
+            file.write(SBATCH_TEMPLATE + "\n" + " ".join(current_run_args))
+        os.system(f"sbatch {SBATCH_FILENAME}")
+    # noise levels and condition and prompts
     for noise_level in noise_levels:
         for prompt in [easy_prompt, hard_prompt]:
             for guidance_scale in [10.0, 25.0, 50.0, 100.0]:
