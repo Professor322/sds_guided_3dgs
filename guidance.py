@@ -8,7 +8,7 @@ from transformers import T5EncoderModel
 
 
 class SDSLoss3DGS(torch.nn.Module):
-    def __init__(self):
+    def __init__(self, prompt=""):
         super().__init__()
 
         # load the model
@@ -31,7 +31,7 @@ class SDSLoss3DGS(torch.nn.Module):
         self.scheduler = pipe.scheduler
         self.num_train_timesteps = self.scheduler.config.num_train_timesteps
         self.alphas = self.scheduler.alphas_cumprod.to(self.device)
-        self.prompt_embeddings = pipe.encode_prompt("")
+        self.prompt_embeddings = pipe.encode_prompt(prompt)
 
     @torch.amp.autocast("cuda", enabled=False)
     def forward_unet(self, latents, t, encoder_hidden_states, **kwargs):

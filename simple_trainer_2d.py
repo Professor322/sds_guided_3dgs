@@ -25,44 +25,7 @@ from torch.utils.data import Dataset, DataLoader
 import torchvision.transforms as transforms
 import torchvision.transforms.functional as VF
 from PIL import Image
-
-
-@dataclass
-class Config:
-    width: int = 256
-    height: int = 256
-    num_points: int = 100_000
-    save_imgs: bool = True
-    iterations: int = 1_000
-    lr: float = 0.01
-    model_type: Literal["3dgs", "2dgs"] = "3dgs"
-    save_steps: List[int] = field(default_factory=lambda: [1_000, 3_000, 7_000, 30_000])
-    img_path: str = ""
-    ckpt_path: str = ""
-    results_dir: str = "results_2d"
-    show_steps: int = 50
-    use_sds_loss: bool = False
-    use_sdi_loss: bool = False
-    use_fused_loss: bool = False
-    lmbd: float = 1.0
-    save_images: bool = False
-    patch_image: bool = False
-    batch_size: int = 64
-    # noise level for conditional image
-    lowres_noise_level: float = 0.75
-    # minimum step for forward diffusion process
-    min_noise_step: int = 20
-    # maximum step for forward diffusion process
-    max_noise_step: int = 980
-    # instead randomly sampling noise we can
-    # linearly changing applied noise
-    use_noise_scheduler: bool = False
-    # this one will gradually collaps t_min and t_max
-    collapsing_noise_scheduler: bool = False
-    show_plots: bool = False
-    base_render_as_cond: bool = False
-    use_lr_scheduler: bool = False
-    downscale_condition: bool = False
+from config import Config
 
 
 class OneImageDataset(Dataset):
@@ -145,7 +108,11 @@ class SimpleTrainer:
         if self.cfg.ckpt_path:
             self.optimizer.load_state_dict(self.optimizer_state_dict)
         if self.cfg.use_sds_loss or self.cfg.use_sdi_loss:
-            self.sds_loss = SDSLoss3DGS() if self.cfg.use_sds_loss else SDILoss3DGS()
+            self.sds_loss = (
+                SDSLoss3DGS(prompt=self.cfg.prompt)
+                if self.cfg.use_sds_loss
+                else SDILoss3DGS(prompt=self.cfg.prompt)
+            )
             self.dataloader = DataLoader(
                 self.one_image_dataset, batch_size=cfg.batch_size, num_workers=0
             )
@@ -329,6 +296,7 @@ class SimpleTrainer:
                     if self.cfg.use_noise_scheduler
                     else None,
                     downscale_condition=cfg.downscale_condition,
+                    guidance_scale=cfg.guidance_scale,
                 )
 
             if self.cfg.use_fused_loss and (
