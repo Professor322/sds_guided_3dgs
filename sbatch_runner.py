@@ -5,12 +5,13 @@ import os
 CHECKPOINT = 2999
 IMG_PATH = "data/360_v2/bicycle/images_8/_DSC8679.JPG"
 CHECKPOINT_PATH = (
-    f"/home/nskochetkov/sds_guided_3dgs/results_2d/ckpts/ckpt_${CHECKPOINT}.pt"
+    f"/home/nskochetkov/sds_guided_3dgs/results_2d/ckpts/ckpt_{CHECKPOINT}.pt"
 )
 MAX_STEP = 980
 MIN_STEP = 20
 ITERATIONS = 1000
-BATCH_SIZE = 32
+# sometimes can hit oom, so we have to reduce it
+BATCH_SIZE = 24
 DEBUG = False
 
 SBATCH_TEMPLATE = """#!/bin/bash
@@ -55,7 +56,7 @@ def main(
         "CUDA_VISIBLE_DEVICES=0 python3 simple_trainer_2d.py",
         f"--img-path {IMG_PATH}",
         f"--iterations {ITERATIONS}",
-        f" --num-points {cfg.num_points}",
+        f"--num-points {cfg.num_points}",
         f"--max-noise-step {MAX_STEP}",
         f"--min-noise-step {MIN_STEP}",
         f"--ckpt-path {CHECKPOINT_PATH}",
@@ -74,7 +75,8 @@ def main(
             print(SBATCH_TEMPLATE + "\n" + " ".join(current_run_args))
         with open(SBATCH_FILENAME, "w") as file:
             file.write(SBATCH_TEMPLATE + "\n" + " ".join(current_run_args))
-        os.system(f"sbatch {SBATCH_FILENAME}")
+        if not DEBUG:
+            os.system(f"sbatch {SBATCH_FILENAME}")
     # noise levels and condition and prompts
     for noise_level in noise_levels:
         for prompt in [easy_prompt, hard_prompt]:
@@ -97,7 +99,8 @@ def main(
                     print(SBATCH_TEMPLATE + "\n" + " ".join(current_run_args))
                 with open(SBATCH_FILENAME, "w") as file:
                     file.write(SBATCH_TEMPLATE + "\n" + " ".join(current_run_args))
-                os.system(f"sbatch {SBATCH_FILENAME}")
+                if not DEBUG:
+                    os.system(f"sbatch {SBATCH_FILENAME}")
 
 
 if __name__ == "__main__":
