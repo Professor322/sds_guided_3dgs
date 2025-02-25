@@ -13,7 +13,12 @@ ITERATIONS = 1000
 BATCH_SIZE = 32
 DEBUG = False
 
-SBATCH_TEMPLATE = """module purge
+SBATCH_TEMPLATE = """#!/bin/bash
+#SBATCH --job-name=train_2d
+#SBATCH --gpus=1
+#SBATCH --cpus-per-task=2
+
+module purge
 module load Python gnu10
 
 source deactivate
