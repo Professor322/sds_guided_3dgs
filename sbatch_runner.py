@@ -10,7 +10,7 @@ CHECKPOINT_PATH = (
 MAX_STEP = 980
 MIN_STEP = 20
 ITERATIONS = 1000
-BATCH_SIZE = 24
+BATCH_SIZE = 32
 DEBUG = False
 
 SBATCH_TEMPLATE = """#!/bin/bash
@@ -59,7 +59,7 @@ def main(
         f"--max-noise-step {MAX_STEP}",
         f"--min-noise-step {MIN_STEP}",
         f"--ckpt-path {CHECKPOINT_PATH}",
-        "--use-sds-loss",
+        f"--batch-size {BATCH_SIZE}" "--use-sds-loss",
     ]
 
     # adjust result dir name
