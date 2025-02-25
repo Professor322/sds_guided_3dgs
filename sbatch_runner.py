@@ -60,10 +60,9 @@ def main(
         current_run_args.append(f"--results-dir {result_dir}")
         if DEBUG:
             print(SBATCH_TEMPLATE + "\n" + " ".join(current_run_args))
-
         with open(SBATCH_FILENAME, "w") as file:
             file.write(SBATCH_TEMPLATE + "\n" + " ".join(current_run_args))
-            os.system(f"sbatch {SBATCH_FILENAME}")
+        os.system(f"sbatch {SBATCH_FILENAME}")
 
 
 if __name__ == "__main__":
