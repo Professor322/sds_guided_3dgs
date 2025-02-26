@@ -135,10 +135,13 @@ def main(
             with open(
                 f"/home/nskochetkov/sds_guided_3dgs/{result_dir}/stats/step999.json",
                 "r",
-            ) as file:
-                data = file.read()
-                results = json.loads(data)
-                psnrs_to_dirs.append((results["psnr"], result_dir))
+            ) as (file, err):
+                if err:
+                    print("does not exist")
+                else:
+                    data = file.read()
+                    results = json.loads(data)
+                    psnrs_to_dirs.append((results["psnr"], result_dir))
 
         psnrs_to_dirs = sorted(psnrs_to_dirs)
         print(psnrs_to_dirs)
