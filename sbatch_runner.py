@@ -1,6 +1,7 @@
 from config import Config
 import tyro
 import os
+import json
 
 CHECKPOINT = 2999
 IMG_PATH = "data/360_v2/bicycle/images_8/_DSC8679.JPG"
@@ -13,6 +14,8 @@ ITERATIONS = 1000
 # sometimes can hit oom, so we have to reduce it
 BATCH_SIZE = 24
 DEBUG = False
+GET_PLOTS = False
+TOP_PSNRS = True
 
 SBATCH_TEMPLATE = """#!/bin/bash
 #SBATCH --job-name=train_2d
@@ -63,6 +66,8 @@ def main(
         f"--batch-size {BATCH_SIZE}",
         "--use-sds-loss",
     ]
+    result_dirs = []
+
     # just noise levels
     for noise_level in noise_levels:
         current_run_args = default_run_args.copy()
@@ -71,11 +76,18 @@ def main(
             current_run_args.append(" --base-render-as-cond")
             result_dir += "_base_render_as_cond"
         current_run_args.append(f"--results-dir {result_dir}")
+        file_content = (
+            SBATCH_TEMPLATE
+            + "\n"
+            + f"echo '{result_dir}'\n"
+            + " ".join(current_run_args)
+        )
+        result_dirs.append(result_dir)
         if DEBUG:
-            print(SBATCH_TEMPLATE + "\n" + " ".join(current_run_args))
+            print(file_content)
         with open(SBATCH_FILENAME, "w") as file:
-            file.write(SBATCH_TEMPLATE + "\n" + " ".join(current_run_args))
-        if not DEBUG:
+            file.write(file_content)
+        if not DEBUG and not GET_PLOTS and not TOP_PSNRS:
             os.system(f"sbatch {SBATCH_FILENAME}")
     # noise levels and condition and prompts
     for noise_level in noise_levels:
@@ -95,12 +107,39 @@ def main(
                     current_run_args.append(" --base-render-as-cond")
                     result_dir += "_base_render_as_cond"
                 current_run_args.append(f"--results-dir {result_dir}")
+                file_content = (
+                    SBATCH_TEMPLATE
+                    + "\n"
+                    + f"echo '{result_dir}'\n"
+                    + " ".join(current_run_args)
+                )
+                result_dirs.append(result_dir)
                 if DEBUG:
-                    print(SBATCH_TEMPLATE + "\n" + " ".join(current_run_args))
+                    print(file_content)
                 with open(SBATCH_FILENAME, "w") as file:
-                    file.write(SBATCH_TEMPLATE + "\n" + " ".join(current_run_args))
-                if not DEBUG:
+                    file.write(file_content)
+                if not DEBUG and not GET_PLOTS and not TOP_PSNRS:
                     os.system(f"sbatch {SBATCH_FILENAME}")
+
+    if GET_PLOTS:
+        for result_dir in result_dirs:
+            print(f"Getting plots for {result_dir}")
+            os.system(
+                f"scp nskochetkov@cluster.hpc.hse.ru:/home/nskochetkov/sds_guided_3dgs/{result_dir}/stats/training_plots.png {result_dir}.png"
+            )
+    if TOP_PSNRS:
+        psnrs_to_dirs = []
+        for result_dir in result_dirs:
+            with open(
+                f"/home/nskochetkov/sds_guided_3dgs/{result_dir}/stats/step999.json",
+                "r",
+            ) as file:
+                data = file.read()
+                results = json.loads(data)
+                psnrs_to_dirs.append((results["psnr"], result_dir))
+
+        psnrs_to_dirs = sorted(psnrs_to_dirs)
+        print(psnrs_to_dirs)
 
 
 if __name__ == "__main__":
