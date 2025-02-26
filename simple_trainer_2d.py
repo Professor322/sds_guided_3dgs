@@ -326,7 +326,7 @@ class SimpleTrainer:
 
             print(f"Iteration {i + 1}/{end}, Loss: {loss.item()}, PSNR: {psnr.item()}")
 
-            if i % self.cfg.show_steps == 0:
+            if i % self.cfg.show_steps == 0 or i == end - 1:
                 if self.cfg.show_plots:
                     clear_output(wait=True)
                 base_render_rgb = (base_render.detach().cpu().numpy() * 255).astype(
