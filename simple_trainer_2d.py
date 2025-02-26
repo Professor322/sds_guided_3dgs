@@ -275,15 +275,16 @@ class SimpleTrainer:
                 # downscale the base image and rendering
                 # compute mse
                 resolution = (64, 64)
+                # interpolate expects b, c, h, w, while we have h, w, c
                 downscaled_out_img = F.interpolate(
-                    out_img.permute(1, 2, 0),
+                    out_img.permute(1, 2, 0).unsqueeze(0),
                     resolution,
                     mode="bilinear",
                     align_corners=False,
                     antialias=True,
                 )
                 downscaled_base_render = F.interpolate(
-                    base_render.permute(1, 2, 0),
+                    base_render.permute(1, 2, 0).unsqueeze(0),
                     resolution,
                     mode="bilinear",
                     align_corners=False,
