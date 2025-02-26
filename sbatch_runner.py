@@ -18,7 +18,7 @@ GET_PLOTS = False
 TOP_PSNRS = False
 
 SBATCH_TEMPLATE = """#!/bin/bash
-#SBATCH --time={01:30:00}
+#SBATCH --time=01:30:00
 #SBATCH --job-name=train_2d
 #SBATCH --gpus=1
 #SBATCH --cpus-per-task=2
