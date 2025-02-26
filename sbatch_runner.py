@@ -48,7 +48,7 @@ def noise_levels_exps(cfg: Config, default_run_args):
             result_dir += "_sdi_loss"
         if cfg.use_downscaled_mse_loss:
             current_run_args.append(f"--use-downscaled-mse-loss")
-            result_dir += "downscaled_mse_loss"
+            result_dir += "_downscaled_mse_loss"
 
         if cfg.base_render_as_cond:
             current_run_args.append("--base-render-as-cond")
