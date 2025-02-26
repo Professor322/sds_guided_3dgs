@@ -122,12 +122,14 @@ def main(
                     os.system(f"sbatch {SBATCH_FILENAME}")
 
     if GET_PLOTS:
+        print("Getting plots...")
         for result_dir in result_dirs:
             print(f"Getting plots for {result_dir}")
             os.system(
                 f"scp nskochetkov@cluster.hpc.hse.ru:/home/nskochetkov/sds_guided_3dgs/{result_dir}/stats/training_plots.png {result_dir}.png"
             )
     if TOP_PSNRS:
+        print("Getting psnrs...")
         psnrs_to_dirs = []
         for result_dir in result_dirs:
             with open(
