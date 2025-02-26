@@ -2,6 +2,7 @@ from config import Config
 import tyro
 import os
 import json
+import glob
 
 CHECKPOINT = 2999
 IMG_PATH = "data/360_v2/bicycle/images_8/_DSC8679.JPG"
@@ -153,10 +154,9 @@ def main(
     if TOP_PSNRS:
         print("Getting psnrs...")
         psnrs_to_dirs = []
+        result_dirs = glob.glob("/home/nskochetkov/sds_guided_3dgs/results_2d_low*")
         for result_dir in result_dirs:
-            filename = (
-                f"/home/nskochetkov/sds_guided_3dgs/{result_dir}/stats/step999.json"
-            )
+            filename = f"{result_dir}/stats/step999.json"
             if not os.path.exists(filename):
                 continue
             with open(
