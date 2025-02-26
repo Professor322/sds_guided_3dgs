@@ -155,6 +155,7 @@ class SDILoss3DGS(SDSLoss3DGS):
         scheduler_timestep=None,
         stochastic_inversion=True,
         clip_x0=True,
+        downscale_condition=False,
     ):
         # prepare images
         batch_size = images.shape[0]
@@ -194,6 +195,7 @@ class SDILoss3DGS(SDSLoss3DGS):
                 original=original,
                 guidance_scale=guidance_scale,
                 lowres_noise_level=lowres_noise_level,
+                downscale_condition=downscale_condition,
             )
             latents_denoised = self.get_x0(latents_noisy, noise_pred, t)
 
@@ -232,12 +234,15 @@ class SDILoss3DGS(SDSLoss3DGS):
         original,
         guidance_scale,
         lowres_noise_level,
+        downscale_condition,
     ):
         # Expand the latents if we are doing classifier free guidance
         batch_size = latents_noisy.shape[0]
         # TODO: hardcoded stuff
         condition = original
-        condition = self.prepare_downscaled_latents(condition, lowres_noise_level)
+        condition = self.prepare_downscaled_latents(
+            condition, lowres_noise_level, downscale=downscale_condition
+        )
         condition = self.scheduler.scale_model_input(
             condition, current_t
         )  # here i changed from next_t to current_t
