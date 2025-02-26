@@ -15,9 +15,10 @@ ITERATIONS = 1000
 BATCH_SIZE = 24
 DEBUG = False
 GET_PLOTS = False
-TOP_PSNRS = True
+TOP_PSNRS = False
 
 SBATCH_TEMPLATE = """#!/bin/bash
+#SBATCH --time={01:30:00}
 #SBATCH --job-name=train_2d
 #SBATCH --gpus=1
 #SBATCH --cpus-per-task=2
@@ -35,46 +36,20 @@ echo "starting 2d training"
 SBATCH_FILENAME = "2d_training_generated.sbatch"
 
 
-def main(
-    cfg: Config,
-) -> None:
-    # modify parameters for testing
+def noise_levels_exps(cfg: Config, default_run_args):
     noise_levels = [0.25, 0.5, 0.75]
-    easy_prompt = "bicycle"
-    hard_prompt = (
-        "A surreal outdoor scene featuring a "
-        "white bicycle seamlessly blending into "
-        "a black park bench, creating an optical illusion. "
-        "The front wheel of the bike rests on the grass, "
-        "while the rear wheel appears to be aligned perfectly "
-        "with the backrest of the bench, making it look as if "
-        "the bicycle is embedded into the structure. The setting "
-        "is a peaceful park with lush green grass, a paved pathway, "
-        "and dense foliage in the background. The atmosphere is calm "
-        "and natural, with soft, diffused lighting enhancing the realism of the scene."
-    )
-    cfg.base_render_as_cond = True
-
-    default_run_args = [
-        "CUDA_VISIBLE_DEVICES=0 python3 simple_trainer_2d.py",
-        f"--img-path {IMG_PATH}",
-        f"--iterations {ITERATIONS}",
-        f"--num-points {cfg.num_points}",
-        f"--max-noise-step {MAX_STEP}",
-        f"--min-noise-step {MIN_STEP}",
-        f"--ckpt-path {CHECKPOINT_PATH}",
-        f"--batch-size {BATCH_SIZE}",
-        "--use-sds-loss",
-    ]
-    result_dirs = []
-
     # just noise levels
+    result_dirs = []
     for noise_level in noise_levels:
         current_run_args = default_run_args.copy()
         result_dir = f"results_2d_low_res_noise_level_{str(noise_level).replace('.', '_')}_{CHECKPOINT}"
+        if cfg.use_sdi_loss:
+            result_dir += "_sdi_loss"
         if cfg.base_render_as_cond:
-            current_run_args.append(" --base-render-as-cond")
+            current_run_args.append("--base-render-as-cond")
             result_dir += "_base_render_as_cond"
+
+        current_run_args.append(f"--lowres-noise-level {noise_level}")
         current_run_args.append(f"--results-dir {result_dir}")
         file_content = (
             SBATCH_TEMPLATE
@@ -89,7 +64,26 @@ def main(
             file.write(file_content)
         if not DEBUG and not GET_PLOTS and not TOP_PSNRS:
             os.system(f"sbatch {SBATCH_FILENAME}")
+    return result_dirs
+
+
+def prompts_and_guidance_exps(cfg: Config, default_run_args):
+    result_dirs = []
+    noise_levels = [0.25, 0.5, 0.75]
     # noise levels and condition and prompts
+    easy_prompt = "bicycle"
+    hard_prompt = (
+        "A surreal outdoor scene featuring a "
+        "white bicycle seamlessly blending into "
+        "a black park bench, creating an optical illusion. "
+        "The front wheel of the bike rests on the grass, "
+        "while the rear wheel appears to be aligned perfectly "
+        "with the backrest of the bench, making it look as if "
+        "the bicycle is embedded into the structure. The setting "
+        "is a peaceful park with lush green grass, a paved pathway, "
+        "and dense foliage in the background. The atmosphere is calm "
+        "and natural, with soft, diffused lighting enhancing the realism of the scene."
+    )
     for noise_level in noise_levels:
         for prompt in [easy_prompt, hard_prompt]:
             for guidance_scale in [10.0, 25.0, 50.0, 100.0]:
@@ -100,7 +94,9 @@ def main(
                 result_dir += (
                     f"_prompt_guidance_{str(guidance_scale).replace('.', '_')}"
                 )
-                current_run_args.append(f" --lowres-noise-level {noise_level}")
+                if cfg.use_sdi_loss:
+                    result_dir += "_sdi_loss"
+                current_run_args.append(f"--lowres-noise-level {noise_level}")
                 current_run_args.append(f'--prompt "{prompt}"')
                 current_run_args.append(f"--guidance-scale {guidance_scale}")
                 if cfg.base_render_as_cond:
@@ -120,6 +116,32 @@ def main(
                     file.write(file_content)
                 if not DEBUG and not GET_PLOTS and not TOP_PSNRS:
                     os.system(f"sbatch {SBATCH_FILENAME}")
+    return result_dirs
+
+
+def main(
+    cfg: Config,
+) -> None:
+    # modify parameters for testing
+    cfg.base_render_as_cond = True
+    cfg.use_sds_loss = True
+    # cfg.use_sdi_loss = True
+
+    default_run_args = [
+        "CUDA_VISIBLE_DEVICES=0 python3 simple_trainer_2d.py",
+        f"--img-path {IMG_PATH}",
+        f"--iterations {ITERATIONS}",
+        f"--num-points {cfg.num_points}",
+        f"--max-noise-step {MAX_STEP}",
+        f"--min-noise-step {MIN_STEP}",
+        f"--ckpt-path {CHECKPOINT_PATH}",
+        f"--batch-size {BATCH_SIZE}",
+        "--use-sds-loss" if cfg.use_sds_loss else "--use-sdi-loss",
+    ]
+    result_dirs = []
+
+    result_dirs += noise_levels_exps(cfg, default_run_args)
+    # result_dirs += prompts_and_guidance_exps(cfg, default_run_args)
 
     if GET_PLOTS:
         print("Getting plots...")
