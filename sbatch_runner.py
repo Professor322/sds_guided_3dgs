@@ -124,8 +124,8 @@ def main(
 ) -> None:
     # modify parameters for testing
     cfg.base_render_as_cond = True
-    cfg.use_sds_loss = True
-    # cfg.use_sdi_loss = True
+    # cfg.use_sds_loss = True
+    cfg.use_sdi_loss = True
 
     default_run_args = [
         "CUDA_VISIBLE_DEVICES=0 python3 simple_trainer_2d.py",
@@ -141,7 +141,7 @@ def main(
     result_dirs = []
 
     result_dirs += noise_levels_exps(cfg, default_run_args)
-    # result_dirs += prompts_and_guidance_exps(cfg, default_run_args)
+    result_dirs += prompts_and_guidance_exps(cfg, default_run_args)
 
     if GET_PLOTS:
         print("Getting plots...")
