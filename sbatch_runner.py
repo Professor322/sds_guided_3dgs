@@ -132,16 +132,18 @@ def main(
         print("Getting psnrs...")
         psnrs_to_dirs = []
         for result_dir in result_dirs:
+            filename = (
+                f"/home/nskochetkov/sds_guided_3dgs/{result_dir}/stats/step999.json"
+            )
+            if not os.path.exists(filename):
+                continue
             with open(
-                f"/home/nskochetkov/sds_guided_3dgs/{result_dir}/stats/step999.json",
+                filename,
                 "r",
-            ) as (file, err):
-                if err:
-                    print("does not exist")
-                else:
-                    data = file.read()
-                    results = json.loads(data)
-                    psnrs_to_dirs.append((results["psnr"], result_dir))
+            ) as file:
+                data = file.read()
+                results = json.loads(data)
+                psnrs_to_dirs.append((results["psnr"], result_dir))
 
         psnrs_to_dirs = sorted(psnrs_to_dirs)
         print(psnrs_to_dirs)
