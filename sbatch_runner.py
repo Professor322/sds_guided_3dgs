@@ -145,8 +145,9 @@ def main(
                 results = json.loads(data)
                 psnrs_to_dirs.append((results["psnr"], result_dir))
 
-        psnrs_to_dirs = sorted(psnrs_to_dirs)
-        print(psnrs_to_dirs)
+        psnrs_to_dirs = sorted(psnrs_to_dirs, reverse=True)
+        for psnr_to_dir in psnrs_to_dirs:
+            print(psnr_to_dir)
 
 
 if __name__ == "__main__":
