@@ -75,10 +75,12 @@ class SimpleTrainer:
     def __init__(self, cfg: Config = Config()):
         self.cfg = cfg
         self.device = torch.device("cuda:0")
+        print(f"Loading dataset...")
         self.one_image_dataset = OneImageDataset(image_path=cfg.img_path)
         self.num_points = self.cfg.num_points
         self.iter = 0
         self.frames = []
+        print(f"Creating directories...")
         self.ckpt_dir = f"{self.cfg.results_dir}/ckpts"
         os.makedirs(self.ckpt_dir, exist_ok=True)
         self.stats_dir = f"{self.cfg.results_dir}/stats"
@@ -96,6 +98,7 @@ class SimpleTrainer:
         self.img_size = torch.tensor([self.W, self.H, 1], device=self.device)
 
         if self.cfg.ckpt_path:
+            print(f"Loading checkpoint {self.cfg.ckpt_path}...")
             self._load_gaussians(self.cfg.ckpt_path)
         else:
             self._init_gaussians()
@@ -106,6 +109,7 @@ class SimpleTrainer:
         )
 
         if self.cfg.ckpt_path:
+            print("Loading optimizer state...")
             self.optimizer.load_state_dict(self.optimizer_state_dict)
         if self.cfg.use_sds_loss or self.cfg.use_sdi_loss:
             self.sds_loss = (
