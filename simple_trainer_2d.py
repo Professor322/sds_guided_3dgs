@@ -276,14 +276,14 @@ class SimpleTrainer:
                 # compute mse
                 resolution = (64, 64)
                 downscaled_out_img = F.interpolate(
-                    out_img,
+                    out_img.permute(1, 2, 0),
                     resolution,
                     mode="bilinear",
                     align_corners=False,
                     antialias=True,
                 )
                 downscaled_base_render = F.interpolate(
-                    out_img,
+                    base_render.permute(1, 2, 0),
                     resolution,
                     mode="bilinear",
                     align_corners=False,
