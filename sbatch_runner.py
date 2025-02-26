@@ -46,6 +46,10 @@ def noise_levels_exps(cfg: Config, default_run_args):
         result_dir = f"results_2d_low_res_noise_level_{str(noise_level).replace('.', '_')}_{CHECKPOINT}"
         if cfg.use_sdi_loss:
             result_dir += "_sdi_loss"
+        if cfg.use_downscaled_mse_loss:
+            current_run_args.append(f"--use-downscaled-mse-loss")
+            result_dir += "downscaled_mse_loss"
+
         if cfg.base_render_as_cond:
             current_run_args.append("--base-render-as-cond")
             result_dir += "_base_render_as_cond"
@@ -125,8 +129,9 @@ def main(
 ) -> None:
     # modify parameters for testing
     cfg.base_render_as_cond = True
-    # cfg.use_sds_loss = True
-    cfg.use_sdi_loss = True
+    cfg.use_sds_loss = False
+    cfg.use_downscaled_mse_loss = True
+    # cfg.use_sdi_loss = True
 
     default_run_args = [
         "CUDA_VISIBLE_DEVICES=0 python3 simple_trainer_2d.py",
@@ -137,13 +142,14 @@ def main(
         f"--min-noise-step {MIN_STEP}",
         f"--ckpt-path {CHECKPOINT_PATH}",
         f"--batch-size {BATCH_SIZE}",
-        "--use-sds-loss" if cfg.use_sds_loss else "--use-sdi-loss",
+        # "--use-sds-loss" if cfg.use_sds_loss else "--use-sdi-loss",
     ]
     result_dirs = []
 
     result_dirs += noise_levels_exps(cfg, default_run_args)
-    result_dirs += prompts_and_guidance_exps(cfg, default_run_args)
+    # result_dirs += prompts_and_guidance_exps(cfg, default_run_args)
 
+    result_dirs = glob.glob("/home/nskochetkov/sds_guided_3dgs/results_2d_low*")
     if GET_PLOTS:
         print("Getting plots...")
         for result_dir in result_dirs:

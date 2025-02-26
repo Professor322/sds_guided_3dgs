@@ -40,3 +40,5 @@ class Config:
     downscale_condition: bool = False
     prompt: str = ""
     guidance_scale: float = 10.0
+    use_classic_mse_loss: bool = False
+    use_downscaled_mse_loss: bool = False

@@ -266,10 +266,30 @@ class SimpleTrainer:
 
             torch.cuda.synchronize()
             times[0] += time.time() - start
-            # calculate loss
-            mse_loss = self.mse_loss(
-                out_img, self.one_image_dataset.img.permute(1, 2, 0)
-            )
+            if self.cfg.use_classic_mse_loss:
+                # calculate loss
+                mse_loss = self.mse_loss(
+                    out_img, self.one_image_dataset.img.permute(1, 2, 0)
+                )
+            elif self.cfg.use_downscaled_mse_loss:
+                # downscale the base image and rendering
+                # compute mse
+                resolution = (64, 64)
+                downscaled_out_img = F.interpolate(
+                    out_img,
+                    resolution,
+                    mode="bilinear",
+                    align_corners=False,
+                    antialias=True,
+                )
+                downscaled_base_render = F.interpolate(
+                    out_img,
+                    resolution,
+                    mode="bilinear",
+                    align_corners=False,
+                    antialias=True,
+                )
+                mse_loss = self.mse_loss(downscaled_out_img, downscaled_base_render)
 
             if self.cfg.use_sds_loss or self.cfg.use_sdi_loss:
                 # H, W, C -> C, H, W
