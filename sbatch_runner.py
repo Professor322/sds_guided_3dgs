@@ -39,42 +39,48 @@ SBATCH_FILENAME = "2d_training_generated.sbatch"
 
 def noise_levels_exps(cfg: Config, default_run_args):
     noise_levels = [0.25, 0.5, 0.75]
+    coefs_for_sds = [0.001, 0.01, 0.1, 1.0]
     # just noise levels
     result_dirs = []
     for noise_level in noise_levels:
-        current_run_args = default_run_args.copy()
-        result_dir = f"results_2d_low_res_noise_level_{str(noise_level).replace('.', '_')}_{CHECKPOINT}"
-        if cfg.use_sdi_loss:
-            result_dir += "_sdi_loss"
-        if cfg.use_downscaled_mse_loss:
-            current_run_args.append(f"--use-downscaled-mse-loss")
-            result_dir += "_downscaled_mse_loss"
+        for coef in coefs_for_sds:
+            current_run_args = default_run_args.copy()
+            result_dir = f"results_2d_low_res_noise_level_{str(noise_level).replace('.', '_')}_{CHECKPOINT}"
+            if cfg.use_sdi_loss:
+                result_dir += "_sdi_loss"
+            if cfg.use_downscaled_mse_loss:
+                current_run_args.append(f"--use-downscaled-mse-loss")
+                result_dir += "_downscaled_mse_loss"
+            if cfg.use_fused_loss:
+                result_dir += "_fused_loss"
+            result_dir += f"_coef_{str(coef).replace('.', '_')}"
 
-        if cfg.base_render_as_cond:
-            current_run_args.append("--base-render-as-cond")
-            result_dir += "_base_render_as_cond"
-
-        current_run_args.append(f"--lowres-noise-level {noise_level}")
-        current_run_args.append(f"--results-dir {result_dir}")
-        file_content = (
-            SBATCH_TEMPLATE
-            + "\n"
-            + f"echo '{result_dir}'\n"
-            + " ".join(current_run_args)
-        )
-        result_dirs.append(result_dir)
-        if DEBUG:
-            print(file_content)
-        with open(SBATCH_FILENAME, "w") as file:
-            file.write(file_content)
-        if not DEBUG and not GET_PLOTS and not TOP_PSNRS:
-            os.system(f"sbatch {SBATCH_FILENAME}")
+            if cfg.base_render_as_cond:
+                current_run_args.append("--base-render-as-cond")
+                result_dir += "_base_render_as_cond"
+            current_run_args.append(f"--lmbd {coef}")
+            current_run_args.append(f"--lowres-noise-level {noise_level}")
+            current_run_args.append(f"--results-dir {result_dir}")
+            file_content = (
+                SBATCH_TEMPLATE
+                + "\n"
+                + f"echo '{result_dir}'\n"
+                + " ".join(current_run_args)
+            )
+            result_dirs.append(result_dir)
+            if DEBUG:
+                print(file_content)
+            with open(SBATCH_FILENAME, "w") as file:
+                file.write(file_content)
+            if not DEBUG and not GET_PLOTS and not TOP_PSNRS:
+                os.system(f"sbatch {SBATCH_FILENAME}")
     return result_dirs
 
 
 def prompts_and_guidance_exps(cfg: Config, default_run_args):
     result_dirs = []
     noise_levels = [0.25, 0.5, 0.75]
+    coefs_for_sds = [0.001, 0.01, 0.1, 1.0]
     # noise levels and condition and prompts
     easy_prompt = "bicycle"
     hard_prompt = (
@@ -92,35 +98,43 @@ def prompts_and_guidance_exps(cfg: Config, default_run_args):
     for noise_level in noise_levels:
         for prompt in [easy_prompt, hard_prompt]:
             for guidance_scale in [10.0, 25.0, 50.0, 100.0]:
-                current_run_args = default_run_args.copy()
-                is_easy_prompt = len(prompt.split(" ")) == 1
-                result_dir = f"results_2d_low_res_noise_level_{str(noise_level).replace('.', '_')}_{CHECKPOINT}"
-                result_dir += f'_{"easy" if is_easy_prompt else "hard"}'
-                result_dir += (
-                    f"_prompt_guidance_{str(guidance_scale).replace('.', '_')}"
-                )
-                if cfg.use_sdi_loss:
-                    result_dir += "_sdi_loss"
-                current_run_args.append(f"--lowres-noise-level {noise_level}")
-                current_run_args.append(f'--prompt "{prompt}"')
-                current_run_args.append(f"--guidance-scale {guidance_scale}")
-                if cfg.base_render_as_cond:
-                    current_run_args.append(" --base-render-as-cond")
-                    result_dir += "_base_render_as_cond"
-                current_run_args.append(f"--results-dir {result_dir}")
-                file_content = (
-                    SBATCH_TEMPLATE
-                    + "\n"
-                    + f"echo '{result_dir}'\n"
-                    + " ".join(current_run_args)
-                )
-                result_dirs.append(result_dir)
-                if DEBUG:
-                    print(file_content)
-                with open(SBATCH_FILENAME, "w") as file:
-                    file.write(file_content)
-                if not DEBUG and not GET_PLOTS and not TOP_PSNRS:
-                    os.system(f"sbatch {SBATCH_FILENAME}")
+                for coef in coefs_for_sds:
+                    current_run_args = default_run_args.copy()
+                    is_easy_prompt = len(prompt.split(" ")) == 1
+                    result_dir = f"results_2d_low_res_noise_level_{str(noise_level).replace('.', '_')}_{CHECKPOINT}"
+                    result_dir += f'_{"easy" if is_easy_prompt else "hard"}'
+                    result_dir += (
+                        f"_prompt_guidance_{str(guidance_scale).replace('.', '_')}"
+                    )
+                    if cfg.use_sdi_loss:
+                        result_dir += "_sdi_loss"
+                    if cfg.use_downscaled_mse_loss:
+                        current_run_args.append(f"--use-downscaled-mse-loss")
+                        result_dir += "_downscaled_mse_loss"
+                    if cfg.use_fused_loss:
+                        result_dir += "_fused_loss"
+                    result_dir += f"_coef_{str(coef).replace('.', '_')}"
+                    current_run_args.append(f"--lmbd {coef}")
+                    current_run_args.append(f"--lowres-noise-level {noise_level}")
+                    current_run_args.append(f'--prompt "{prompt}"')
+                    current_run_args.append(f"--guidance-scale {guidance_scale}")
+                    if cfg.base_render_as_cond:
+                        current_run_args.append(" --base-render-as-cond")
+                        result_dir += "_base_render_as_cond"
+                    current_run_args.append(f"--results-dir {result_dir}")
+                    file_content = (
+                        SBATCH_TEMPLATE
+                        + "\n"
+                        + f"echo '{result_dir}'\n"
+                        + " ".join(current_run_args)
+                    )
+                    result_dirs.append(result_dir)
+                    if DEBUG:
+                        print(file_content)
+                    with open(SBATCH_FILENAME, "w") as file:
+                        file.write(file_content)
+                    if not DEBUG and not GET_PLOTS and not TOP_PSNRS:
+                        os.system(f"sbatch {SBATCH_FILENAME}")
     return result_dirs
 
 
@@ -129,7 +143,8 @@ def main(
 ) -> None:
     # modify parameters for testing
     cfg.base_render_as_cond = True
-    cfg.use_sds_loss = False
+    cfg.use_sds_loss = True
+    cfg.use_fused_loss = True
     cfg.use_downscaled_mse_loss = True
     # cfg.use_sdi_loss = True
 
@@ -142,12 +157,13 @@ def main(
         f"--min-noise-step {MIN_STEP}",
         f"--ckpt-path {CHECKPOINT_PATH}",
         f"--batch-size {BATCH_SIZE}",
-        # "--use-sds-loss" if cfg.use_sds_loss else "--use-sdi-loss",
+        "--use-sds-loss" if cfg.use_sds_loss else "--use-sdi-loss",
+        "--use-fused-loss",
     ]
     result_dirs = []
 
     result_dirs += noise_levels_exps(cfg, default_run_args)
-    # result_dirs += prompts_and_guidance_exps(cfg, default_run_args)
+    result_dirs += prompts_and_guidance_exps(cfg, default_run_args)
 
     result_dirs = glob.glob("/home/nskochetkov/sds_guided_3dgs/results_2d_low*")
     if GET_PLOTS:

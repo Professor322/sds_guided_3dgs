@@ -98,7 +98,6 @@ class SimpleTrainer:
         self.img_size = torch.tensor([self.W, self.H, 1], device=self.device)
 
         if self.cfg.ckpt_path:
-            print(f"Loading checkpoint {self.cfg.ckpt_path}...")
             self._load_gaussians(self.cfg.ckpt_path)
         else:
             self._init_gaussians()
@@ -311,17 +310,20 @@ class SimpleTrainer:
                 else:
                     min_step = self.cfg.min_noise_step
                     max_step = self.cfg.max_noise_step
-                sds = self.sds_loss(
-                    images=pred,
-                    original=real,
-                    min_step=min_step,
-                    max_step=max_step,
-                    lowres_noise_level=self.cfg.lowres_noise_level,
-                    scheduler_timestep=self.noise_scheduler[i]
-                    if self.cfg.use_noise_scheduler
-                    else None,
-                    downscale_condition=cfg.downscale_condition,
-                    guidance_scale=cfg.guidance_scale,
+                sds = (
+                    self.sds_loss(
+                        images=pred,
+                        original=real,
+                        min_step=min_step,
+                        max_step=max_step,
+                        lowres_noise_level=self.cfg.lowres_noise_level,
+                        scheduler_timestep=self.noise_scheduler[i]
+                        if self.cfg.use_noise_scheduler
+                        else None,
+                        downscale_condition=cfg.downscale_condition,
+                        guidance_scale=cfg.guidance_scale,
+                    )
+                    * self.cfg.lmbd
                 )
 
             if self.cfg.use_fused_loss and (
