@@ -11,7 +11,7 @@ CHECKPOINT_PATH = (
 )
 MAX_STEP = 980
 MIN_STEP = 20
-ITERATIONS = 5000
+ITERATIONS = 10_000
 # sometimes can hit oom, so we have to reduce it
 BATCH_SIZE = 24
 DEBUG = False
@@ -19,7 +19,7 @@ GET_PLOTS = False
 TOP_PSNRS = False
 
 SBATCH_TEMPLATE = """#!/bin/bash
-#SBATCH --time=12:00:00
+#SBATCH --time=24:00:00
 #SBATCH --job-name=train_2d
 #SBATCH --gpus=1
 #SBATCH --cpus-per-task=2
@@ -160,7 +160,7 @@ def simple_experiments(cfg: Config, default_run_args):
             for guidance_scale in guidance_scales:
                 current_run_args = default_run_args.copy()
                 is_easy_prompt = len(prompt.split(" ")) == 1
-                result_dir = f"results_2d_low_res_noise_level_{str(noise_level).replace('.', '_')}_{CHECKPOINT}"
+                result_dir = f"results_2d_low_res_noise_level_{str(noise_level).replace('.', '_')}_{CHECKPOINT}_iter_{ITERATIONS}"
                 result_dir += f'_{"easy" if is_easy_prompt else "hard"}'
                 result_dir += (
                     f"_prompt_guidance_{str(guidance_scale).replace('.', '_')}"
