@@ -19,7 +19,7 @@ GET_PLOTS = False
 TOP_PSNRS = False
 
 SBATCH_TEMPLATE = """#!/bin/bash
-#SBATCH --time=01:30:00
+#SBATCH --time=12:00:00
 #SBATCH --job-name=train_2d
 #SBATCH --gpus=1
 #SBATCH --cpus-per-task=2
@@ -167,10 +167,10 @@ def simple_experiments(cfg: Config, default_run_args):
                 )
                 if cfg.use_lr_scheduler:
                     current_run_args.append("--use-lr-scheduler")
-                    result_dir += "lr_scheduler"
+                    result_dir += "_lr_scheduler"
                 if cfg.collapsing_noise_scheduler:
                     current_run_args.append("--collapsing-noise-scheduler")
-                    result_dir += "noise_scheduler"
+                    result_dir += "_noise_scheduler"
 
                 if cfg.use_sdi_loss:
                     result_dir += "_sdi_loss"
