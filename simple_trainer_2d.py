@@ -34,7 +34,8 @@ class OneImageDataset(Dataset):
         image_path,
         patch_size=64,
         dataset_len=1000,
-        resize=True,
+        resize_width=256,
+        resize_height=256,
         train=True,
         use_generated_img=False,
     ):
@@ -43,8 +44,8 @@ class OneImageDataset(Dataset):
 
         self.len = dataset_len
         self.img = Image.open(image_path)
-        if resize:
-            self.img = self.img.resize((256, 256))
+        if resize_width != 0 and resize_height != 0:
+            self.img = self.img.resize((resize_width, resize_height))
         to_tensor = transforms.ToTensor()
         self.img = to_tensor(self.img)
         self.patch_size = patch_size
@@ -53,11 +54,11 @@ class OneImageDataset(Dataset):
         self.use_generated_img = use_generated_img
 
     def __getitem__(self, idx):
-        # C, H, W -> H, W, C
-        i, j, h, w = transforms.RandomCrop.get_params(
-            self.img, output_size=(self.patch_size, self.patch_size)
-        )
         if self.train:
+            # C, H, W -> H, W, C
+            i, j, h, w = transforms.RandomCrop.get_params(
+                self.img, output_size=(self.patch_size, self.patch_size)
+            )
             img = self.img if not self.use_generated_img else self.generated_img
             patch_real = VF.crop(img, i, j, h, w).permute(1, 2, 0)
             patch_pred = VF.crop(self.training_img, i, j, h, w).permute(1, 2, 0)
@@ -76,7 +77,9 @@ class SimpleTrainer:
         self.cfg = cfg
         self.device = torch.device("cuda:0")
         print(f"Loading dataset...")
-        self.one_image_dataset = OneImageDataset(image_path=cfg.img_path)
+        self.one_image_dataset = OneImageDataset(
+            image_path=cfg.img_path, resize_height=cfg.height, resize_width=cfg.width
+        )
         self.num_points = self.cfg.num_points
         self.iter = 0
         self.frames = []
@@ -366,7 +369,7 @@ class SimpleTrainer:
                 ).astype(np.uint8)
 
                 # Create the figure with an additional row for the new plot
-                fig, axes = plt.subplots(4, 2, figsize=(12, 20))
+                fig, axes = plt.subplots(3, 3, figsize=(12, 20))
 
                 # Plot 1: Original Image
                 axes[0, 0].imshow(orig)
@@ -378,7 +381,12 @@ class SimpleTrainer:
                 axes[0, 1].set_title("Predicted Image")
                 axes[0, 1].axis("off")
 
-                # Plot 3: PSNR Evolution
+                # Plot 3: Base Render Image
+                axes[0, 2].imshow(base_render_rgb)
+                axes[0, 2].set_title("Base Render from Start of Training")
+                axes[0, 2].axis("off")
+
+                # Plot 4: PSNR Evolution
                 axes[1, 0].plot(psnrs, label="PSNR")
                 axes[1, 0].set_title("PSNR")
                 axes[1, 0].set_xlabel("Epoch")
@@ -386,7 +394,7 @@ class SimpleTrainer:
                 axes[1, 0].grid(True)
                 axes[1, 0].legend()
 
-                # Plot 4: Loss Evolution
+                # Plot 5: Loss Evolution
                 axes[1, 1].plot(losses, label="Loss", color="red")
                 axes[1, 1].set_title("Loss")
                 axes[1, 1].set_xlabel("Epoch")
@@ -394,26 +402,21 @@ class SimpleTrainer:
                 axes[1, 1].grid(True)
                 axes[1, 1].legend()
 
-                # Plot 5: Gradient Norm Evolution
-                axes[2, 0].plot(grad_norms, label="Gradient Norm", color="purple")
-                axes[2, 0].set_title("Gradient Norm")
-                axes[2, 0].set_xlabel("Epoch")
-                axes[2, 0].set_ylabel("Gradient Norm")
-                axes[2, 0].grid(True)
-                axes[2, 0].legend()
-
-                # Plot 6: Base Render Image
-                axes[2, 1].imshow(base_render_rgb)
-                axes[2, 1].set_title("Base Render from Start of Training")
-                axes[2, 1].axis("off")
+                # Plot 6: Gradient Norm Evolution
+                axes[1, 2].plot(grad_norms, label="Gradient Norm", color="purple")
+                axes[1, 2].set_title("Gradient Norm")
+                axes[1, 2].set_xlabel("Epoch")
+                axes[1, 2].set_ylabel("Gradient Norm")
+                axes[1, 2].grid(True)
+                axes[1, 2].legend()
 
                 # Plot 7: Learning Rate Evolution
-                axes[3, 0].plot(learning_rates, label="Learning Rate", color="green")
-                axes[3, 0].set_title("Learning Rate Evolution")
-                axes[3, 0].set_xlabel("Epoch")
-                axes[3, 0].set_ylabel("Learning Rate")
-                axes[3, 0].grid(True)
-                axes[3, 0].legend()
+                axes[2, 0].plot(learning_rates, label="Learning Rate", color="green")
+                axes[2, 0].set_title("Learning Rate Evolution")
+                axes[2, 0].set_xlabel("Epoch")
+                axes[2, 0].set_ylabel("Learning Rate")
+                axes[2, 0].grid(True)
+                axes[2, 0].legend()
 
                 # Adjust layout
                 plt.tight_layout()
@@ -453,15 +456,6 @@ class SimpleTrainer:
         print(
             f"Per step(s):\nRasterization: {times[0]/self.cfg.iterations:.5f}, Backward: {times[1]/self.cfg.iterations:.5f}"
         )
-
-
-def image_path_to_tensor(image_path: Path):
-    import torchvision.transforms as transforms
-
-    img = Image.open(image_path)
-    transform = transforms.ToTensor()
-    img_tensor = transform(img).permute(1, 2, 0)[..., :3]
-    return img_tensor
 
 
 def main(

@@ -37,6 +37,27 @@ echo "starting 2d training"
 SBATCH_FILENAME = "2d_training_generated.sbatch"
 
 
+def classic_splat_exps():
+
+    result_dir = "results_2d_classic_64x64"
+    classic_run_args = [
+        "python3 simple_trainer_2d.py",
+        f"--img-path {IMG_PATH}",
+        f"--iterations 30000",
+        f"--width 64",
+        f"--height 64",
+    ]
+    file_content = (
+        SBATCH_TEMPLATE + "\n" + f"echo '{result_dir}'\n" + " ".join(classic_run_args)
+    )
+    if DEBUG:
+        print(file_content)
+    with open(SBATCH_FILENAME, "w") as file:
+        file.write(file_content)
+    if not DEBUG and not GET_PLOTS and not TOP_PSNRS:
+        os.system(f"sbatch {SBATCH_FILENAME}")
+
+
 def noise_levels_exps(cfg: Config, default_run_args):
     noise_levels = [0.25, 0.5, 0.75]
     coefs_for_sds = [0.001, 0.01, 0.1, 1.0]
@@ -227,7 +248,8 @@ def main(
         # "--use-fused-loss",
     ]
     result_dirs = []
-    result_dirs += simple_experiments(cfg, default_run_args)
+    result_dirs += classic_splat_exps()
+    # result_dirs += simple_experiments(cfg, default_run_args)
     # result_dirs += noise_levels_exps(cfg, default_run_args)
     # result_dirs += prompts_and_guidance_exps(cfg, default_run_args)
 
