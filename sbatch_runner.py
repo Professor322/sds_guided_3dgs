@@ -46,7 +46,7 @@ def classic_splat_exps():
         f"--iterations 30000",
         f"--width 64",
         f"--height 64",
-        f"--result-dir {result_dir}",
+        f"--results-dir {result_dir}",
     ]
     file_content = (
         SBATCH_TEMPLATE + "\n" + f"echo '{result_dir}'\n" + " ".join(classic_run_args)
