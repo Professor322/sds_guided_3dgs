@@ -47,7 +47,7 @@ def classic_splat_exps():
         f"--width 64",
         f"--height 64",
         f"--results-dir {result_dir}",
-        f"--use_classic_mse_loss",
+        f"--use-classic-mse_loss",
     ]
     file_content = (
         SBATCH_TEMPLATE + "\n" + f"echo '{result_dir}'\n" + " ".join(classic_run_args)
