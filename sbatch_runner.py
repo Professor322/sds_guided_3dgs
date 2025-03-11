@@ -57,6 +57,8 @@ def classic_splat_exps():
     if not DEBUG and not GET_PLOTS and not TOP_PSNRS:
         os.system(f"sbatch {SBATCH_FILENAME}")
 
+    return [result_dir]
+
 
 def noise_levels_exps(cfg: Config, default_run_args):
     noise_levels = [0.25, 0.5, 0.75]
