@@ -369,7 +369,7 @@ class SimpleTrainer:
                 ).astype(np.uint8)
 
                 # Create the figure with an additional row for the new plot
-                fig, axes = plt.subplots(3, 3, figsize=(12, 20))
+                fig, axes = plt.subplots(3, 3, figsize=(20, 20))
 
                 # Plot 1: Original Image
                 axes[0, 0].imshow(orig)

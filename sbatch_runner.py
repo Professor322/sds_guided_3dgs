@@ -11,7 +11,7 @@ CHECKPOINT_PATH = (
 )
 MAX_STEP = 980
 MIN_STEP = 20
-ITERATIONS = 10_000
+ITERATIONS = 1_000
 # sometimes can hit oom, so we have to reduce it
 BATCH_SIZE = 24
 DEBUG = False
@@ -37,8 +37,72 @@ echo "starting 2d training"
 SBATCH_FILENAME = "2d_training_generated.sbatch"
 
 
-def classic_splat_exps():
+def different_checkpoints_exp(cfg: Config, default_run_args):
+    checkpoints = [999, 2999, 6999, 29999]
+    easy_prompt = "bicycle"
+    hard_prompt = (
+        "A surreal outdoor scene featuring a "
+        "white bicycle seamlessly blending into "
+        "a black park bench, creating an optical illusion. "
+        "The front wheel of the bike rests on the grass, "
+        "while the rear wheel appears to be aligned perfectly "
+        "with the backrest of the bench, making it look as if "
+        "the bicycle is embedded into the structure. The setting "
+        "is a peaceful park with lush green grass, a paved pathway, "
+        "and dense foliage in the background. The atmosphere is calm "
+        "and natural, with soft, diffused lighting enhancing the realism of the scene."
+    )
+    noise_levels = [0.25, 0.5, 0.75]
+    guidance_scales = [10.0, 25.0, 50.0, 100.0]
+    result_dirs = []
+    for checkpoint in checkpoints:
+        for prompt in [easy_prompt, hard_prompt]:
+            for noise_level in noise_levels:
+                for guidance_scale in guidance_scales:
+                    current_run_args = default_run_args.copy()
+                    current_run_args.append(
+                        f"--ckpt-path /home/nskochetkov/sds_guided_3dgs/results_2d_classic_64x64/ckpts/ckpt_{checkpoint}.pt"
+                    )
+                    is_easy_prompt = len(prompt.split(" ")) == 1
+                    result_dir = f"results_2d_low_res_noise_level_{str(noise_level).replace('.', '_')}_{checkpoint}_{cfg.height}x{cfg.width}"
+                    result_dir += f'_{"easy" if is_easy_prompt else "hard"}'
+                    result_dir += (
+                        f"_prompt_guidance_{str(guidance_scale).replace('.', '_')}"
+                    )
+                    if cfg.use_sdi_loss:
+                        result_dir += "_sdi_loss"
+                    if cfg.use_downscaled_mse_loss:
+                        current_run_args.append(f"--use-downscaled-mse-loss")
+                        result_dir += "_downscaled_mse_loss"
+                    if cfg.use_fused_loss:
+                        result_dir += "_fused_loss"
+                    current_run_args.append(f"--lowres-noise-level {noise_level}")
+                    current_run_args.append(f'--prompt "{prompt}"')
+                    current_run_args.append(f"--guidance-scale {guidance_scale}")
+                    current_run_args.append(f"--width {cfg.width}")
+                    current_run_args.append(f"--height {cfg.height}")
+                    if cfg.base_render_as_cond:
+                        current_run_args.append("--base-render-as-cond")
+                        result_dir += "_base_render_as_cond"
+                    current_run_args.append(f"--results-dir {result_dir}")
+                    file_content = (
+                        SBATCH_TEMPLATE
+                        + "\n"
+                        + f"echo '{result_dir}'\n"
+                        + " ".join(current_run_args)
+                    )
+                    result_dirs.append(result_dir)
+                    if DEBUG:
+                        print(file_content)
+                    with open(SBATCH_FILENAME, "w") as file:
+                        file.write(file_content)
+                    if not DEBUG and not GET_PLOTS and not TOP_PSNRS:
+                        os.system(f"sbatch {SBATCH_FILENAME}")
 
+    return result_dirs
+
+
+def classic_splat_exps():
     result_dir = "results_2d_classic_64x64"
     classic_run_args = [
         "python3 simple_trainer_2d.py",
@@ -70,6 +134,7 @@ def noise_levels_exps(cfg: Config, default_run_args):
     for noise_level in noise_levels:
         for coef in coefs_for_sds:
             current_run_args = default_run_args.copy()
+            current_run_args.append(f"--ckpt-path {CHECKPOINT_PATH}")
             result_dir = f"results_2d_low_res_noise_level_{str(noise_level).replace('.', '_')}_{CHECKPOINT}"
             if cfg.use_sdi_loss:
                 result_dir += "_sdi_loss"
@@ -125,6 +190,7 @@ def prompts_and_guidance_exps(cfg: Config, default_run_args):
             for guidance_scale in [10.0, 25.0, 50.0, 100.0]:
                 for coef in coefs_for_sds:
                     current_run_args = default_run_args.copy()
+                    current_run_args.append(f"--ckpt-path {CHECKPOINT_PATH}")
                     is_easy_prompt = len(prompt.split(" ")) == 1
                     result_dir = f"results_2d_low_res_noise_level_{str(noise_level).replace('.', '_')}_{CHECKPOINT}"
                     result_dir += f'_{"easy" if is_easy_prompt else "hard"}'
@@ -184,6 +250,7 @@ def simple_experiments(cfg: Config, default_run_args):
         for prompt in [easy_prompt, hard_prompt]:
             for guidance_scale in guidance_scales:
                 current_run_args = default_run_args.copy()
+                current_run_args.append(f"--ckpt-path {CHECKPOINT_PATH}")
                 is_easy_prompt = len(prompt.split(" ")) == 1
                 result_dir = f"results_2d_low_res_noise_level_{str(noise_level).replace('.', '_')}_{CHECKPOINT}_iter_{ITERATIONS}"
                 result_dir += f'_{"easy" if is_easy_prompt else "hard"}'
@@ -233,10 +300,12 @@ def main(
     # modify parameters for testing
     cfg.base_render_as_cond = True
     cfg.use_sds_loss = True
+    cfg.width = 64
+    cfg.height = 64
     cfg.use_fused_loss = False
     cfg.use_downscaled_mse_loss = False
-    cfg.collapsing_noise_scheduler = True
-    cfg.use_lr_scheduler = True
+    # cfg.collapsing_noise_scheduler = True
+    # cfg.use_lr_scheduler = True
     # cfg.use_sdi_loss = True
 
     default_run_args = [
@@ -246,13 +315,13 @@ def main(
         f"--num-points {cfg.num_points}",
         f"--max-noise-step {MAX_STEP}",
         f"--min-noise-step {MIN_STEP}",
-        f"--ckpt-path {CHECKPOINT_PATH}",
         f"--batch-size {BATCH_SIZE}",
         "--use-sds-loss" if cfg.use_sds_loss else "--use-sdi-loss",
         # "--use-fused-loss",
     ]
     result_dirs = []
-    result_dirs += classic_splat_exps()
+    result_dirs += different_checkpoints_exp(cfg, default_run_args)
+    # result_dirs += classic_splat_exps()
     # result_dirs += simple_experiments(cfg, default_run_args)
     # result_dirs += noise_levels_exps(cfg, default_run_args)
     # result_dirs += prompts_and_guidance_exps(cfg, default_run_args)
