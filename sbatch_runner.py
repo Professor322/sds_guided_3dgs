@@ -5,7 +5,8 @@ import json
 import glob
 
 CHECKPOINT = 2999
-IMG_PATH = "data/360_v2/bicycle/images_8/_DSC8679.JPG"
+# IMG_PATH = "data/360_v2/bicycle/images_8/_DSC8679.JPG"
+IMG_PATH = "render_bicycle_hard_prompt.png"
 CHECKPOINT_PATH = (
     f"/home/nskochetkov/sds_guided_3dgs/results_2d/ckpts/ckpt_{CHECKPOINT}.pt"
 )
@@ -13,7 +14,7 @@ MAX_STEP = 980
 MIN_STEP = 20
 ITERATIONS = 1_000
 # sometimes can hit oom, so we have to reduce it
-BATCH_SIZE = 1
+BATCH_SIZE = 24
 DEBUG = False
 GET_PLOTS = False
 TOP_PSNRS = False
@@ -102,14 +103,14 @@ def different_checkpoints_exp(cfg: Config, default_run_args):
     return result_dirs
 
 
-def classic_splat_exps():
-    result_dir = "results_2d_classic_64x64"
+def classic_splat_exps(cfg: Config):
+    result_dir = "results_2d_classic_from_render_hard_prompt"
     classic_run_args = [
         "python3 simple_trainer_2d.py",
         f"--img-path {IMG_PATH}",
         f"--iterations 30000",
-        f"--width 64",
-        f"--height 64",
+        f"--width {cfg.width}",
+        f"--height {cfg.height}",
         f"--results-dir {result_dir}",
         f"--use-classic-mse_loss",
     ]
@@ -300,8 +301,8 @@ def main(
     # modify parameters for testing
     cfg.base_render_as_cond = True
     cfg.use_sds_loss = True
-    cfg.width = 64
-    cfg.height = 64
+    cfg.width = 256
+    cfg.height = 256
     cfg.use_fused_loss = False
     cfg.use_downscaled_mse_loss = False
     # cfg.collapsing_noise_scheduler = True
@@ -320,8 +321,8 @@ def main(
         # "--use-fused-loss",
     ]
     result_dirs = []
-    result_dirs += different_checkpoints_exp(cfg, default_run_args)
-    # result_dirs += classic_splat_exps()
+    # result_dirs += different_checkpoints_exp(cfg, default_run_args)
+    result_dirs += classic_splat_exps(cfg)
     # result_dirs += simple_experiments(cfg, default_run_args)
     # result_dirs += noise_levels_exps(cfg, default_run_args)
     # result_dirs += prompts_and_guidance_exps(cfg, default_run_args)
