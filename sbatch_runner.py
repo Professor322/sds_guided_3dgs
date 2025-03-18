@@ -53,8 +53,10 @@ def different_checkpoints_exp(cfg: Config, default_run_args):
         "and dense foliage in the background. The atmosphere is calm "
         "and natural, with soft, diffused lighting enhancing the realism of the scene."
     )
-    noise_levels = [0.25, 0.5, 0.75]
-    guidance_scales = [10.0, 25.0, 50.0, 100.0]
+    # noise_levels = [0.25, 0.5, 0.75]
+    # guidance_scales = [10.0, 25.0, 50.0, 100.0]
+    noise_levels = [0.25]
+    guidance_scales = [10.0, 25.0]
     result_dirs = []
     for checkpoint in checkpoints:
         for prompt in [easy_prompt, hard_prompt]:
@@ -62,10 +64,10 @@ def different_checkpoints_exp(cfg: Config, default_run_args):
                 for guidance_scale in guidance_scales:
                     current_run_args = default_run_args.copy()
                     current_run_args.append(
-                        f"--ckpt-path /home/nskochetkov/sds_guided_3dgs/results_2d_classic_64x64/ckpts/ckpt_{checkpoint}.pt"
+                        f"--ckpt-path /home/nskochetkov/sds_guided_3dgs/results_2d_classic_from_render_hard_prompt/ckpts/ckpt_{checkpoint}.pt"
                     )
                     is_easy_prompt = len(prompt.split(" ")) == 1
-                    result_dir = f"results_2d_low_res_noise_level_{str(noise_level).replace('.', '_')}_{checkpoint}_{cfg.height}x{cfg.width}"
+                    result_dir = f"results_2d_low_res_noise_level_{str(noise_level).replace('.', '_')}_{checkpoint}_{cfg.height}x{cfg.width}_upscaled"
                     result_dir += f'_{"easy" if is_easy_prompt else "hard"}'
                     result_dir += (
                         f"_prompt_guidance_{str(guidance_scale).replace('.', '_')}"
@@ -321,8 +323,8 @@ def main(
         # "--use-fused-loss",
     ]
     result_dirs = []
-    # result_dirs += different_checkpoints_exp(cfg, default_run_args)
-    result_dirs += classic_splat_exps(cfg)
+    result_dirs += different_checkpoints_exp(cfg, default_run_args)
+    # result_dirs += classic_splat_exps(cfg)
     # result_dirs += simple_experiments(cfg, default_run_args)
     # result_dirs += noise_levels_exps(cfg, default_run_args)
     # result_dirs += prompts_and_guidance_exps(cfg, default_run_args)
