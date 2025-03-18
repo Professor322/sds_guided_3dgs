@@ -107,10 +107,11 @@ def different_checkpoints_exp(cfg: Config, default_run_args):
 
 def classic_splat_exps(cfg: Config):
     result_dir = "results_2d_classic_64x64"
+    iterations = 1_000
     classic_run_args = [
         "python3 simple_trainer_2d.py",
         f"--img-path {IMG_PATH}",
-        f"--iterations 30000",
+        f"--iterations {iterations}",
         f"--width {cfg.width}",
         f"--height {cfg.height}",
         f"--results-dir {result_dir}",
