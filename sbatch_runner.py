@@ -5,8 +5,8 @@ import json
 import glob
 
 CHECKPOINT = 2999
-# IMG_PATH = "data/360_v2/bicycle/images_8/_DSC8679.JPG"
-IMG_PATH = "render_bicycle_hard_prompt.png"
+IMG_PATH = "data/360_v2/bicycle/images_8/_DSC8679.JPG"
+# IMG_PATH = "render_bicycle_hard_prompt.png"
 CHECKPOINT_PATH = (
     f"/home/nskochetkov/sds_guided_3dgs/results_2d/ckpts/ckpt_{CHECKPOINT}.pt"
 )
@@ -106,7 +106,7 @@ def different_checkpoints_exp(cfg: Config, default_run_args):
 
 
 def classic_splat_exps(cfg: Config):
-    result_dir = "results_2d_classic_from_render_hard_prompt"
+    result_dir = "results_2d_classic_64x64"
     classic_run_args = [
         "python3 simple_trainer_2d.py",
         f"--img-path {IMG_PATH}",
@@ -303,8 +303,8 @@ def main(
     # modify parameters for testing
     cfg.base_render_as_cond = True
     cfg.use_sds_loss = True
-    cfg.width = 256
-    cfg.height = 256
+    cfg.width = 64
+    cfg.height = 64
     cfg.use_fused_loss = False
     cfg.use_downscaled_mse_loss = False
     # cfg.collapsing_noise_scheduler = True
@@ -323,8 +323,8 @@ def main(
         # "--use-fused-loss",
     ]
     result_dirs = []
-    result_dirs += different_checkpoints_exp(cfg, default_run_args)
-    # result_dirs += classic_splat_exps(cfg)
+    # result_dirs += different_checkpoints_exp(cfg, default_run_args)
+    result_dirs += classic_splat_exps(cfg)
     # result_dirs += simple_experiments(cfg, default_run_args)
     # result_dirs += noise_levels_exps(cfg, default_run_args)
     # result_dirs += prompts_and_guidance_exps(cfg, default_run_args)

@@ -11,7 +11,9 @@ class Config:
     iterations: int = 1_000
     lr: float = 0.01
     model_type: Literal["3dgs", "2dgs"] = "3dgs"
-    save_steps: List[int] = field(default_factory=lambda: [1_000, 3_000, 7_000, 30_000])
+    save_steps: List[int] = field(
+        default_factory=lambda: [500, 700, 1_000, 3_000, 7_000, 30_000]
+    )
     img_path: str = ""
     ckpt_path: str = ""
     results_dir: str = "results_2d"
