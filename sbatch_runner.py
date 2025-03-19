@@ -5,8 +5,8 @@ import json
 import glob
 
 CHECKPOINT = 2999
-IMG_PATH = "data/360_v2/bicycle/images_8/_DSC8679.JPG"
-# IMG_PATH = "render_bicycle_hard_prompt.png"
+# IMG_PATH = "data/360_v2/bicycle/images_8/_DSC8679.JPG"
+IMG_PATH = "render_bicycle_hard_prompt.png"
 CHECKPOINT_PATH = (
     f"/home/nskochetkov/sds_guided_3dgs/results_2d/ckpts/ckpt_{CHECKPOINT}.pt"
 )
