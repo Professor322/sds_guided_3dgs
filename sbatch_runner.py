@@ -106,7 +106,7 @@ def different_checkpoints_exp(cfg: Config, default_run_args):
 
 
 def classic_splat_exps(cfg: Config):
-    result_dir = "results_2d_classic_64x64"
+    result_dir = "results_2d_classic_256x256_upscaled_pruning"
     iterations = 1_000
     classic_run_args = [
         "python3 simple_trainer_2d.py",
