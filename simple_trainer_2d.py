@@ -7,6 +7,7 @@ from typing import Literal, Optional
 
 import numpy as np
 import torch
+import torch.nn.parameter
 import tyro
 from PIL import Image
 from torch import Tensor, optim
@@ -26,6 +27,8 @@ import torchvision.transforms as transforms
 import torchvision.transforms.functional as VF
 from PIL import Image
 from config import Config
+import tqdm
+from gsplat.strategy import DefaultStrategy
 
 
 class OneImageDataset(Dataset):
@@ -75,14 +78,14 @@ class SimpleTrainer:
 
     def __init__(self, cfg: Config = Config()):
         self.cfg = cfg
+        self.cfg.strategy = DefaultStrategy(verbose=True)
+        self.strategy_state = None
         self.device = torch.device("cuda:0")
         print(f"Loading dataset...")
         self.one_image_dataset = OneImageDataset(
             image_path=cfg.img_path, resize_height=cfg.height, resize_width=cfg.width
         )
         self.num_points = self.cfg.num_points
-        self.iter = 0
-        self.frames = []
         print(f"Creating directories...")
         self.ckpt_dir = f"{self.cfg.results_dir}/ckpts"
         os.makedirs(self.ckpt_dir, exist_ok=True)
@@ -101,18 +104,12 @@ class SimpleTrainer:
         self.img_size = torch.tensor([self.W, self.H, 1], device=self.device)
 
         if self.cfg.ckpt_path:
-            self._load_gaussians(self.cfg.ckpt_path)
+            self.splats, self.optimizers = self.load_splats_with_optimizers()
         else:
-            self._init_gaussians()
+            self.splats, self.optimizers = self.create_splats_with_optimizers()
+        self.cfg.strategy.check_sanity(self.splats, self.optimizers)
+        print("Model initialized. Number of GS:", len(self.splats["means"]))
 
-        self.optimizer = optim.Adam(
-            [self.rgbs, self.means, self.scales, self.opacities, self.quats],
-            self.cfg.lr,
-        )
-
-        if self.cfg.ckpt_path:
-            print("Loading optimizer state...")
-            self.optimizer.load_state_dict(self.optimizer_state_dict)
         if self.cfg.use_sds_loss or self.cfg.use_sdi_loss:
             self.sds_loss = (
                 SDSLoss3DGS(prompt=self.cfg.prompt)
@@ -136,6 +133,131 @@ class SimpleTrainer:
                 pct_start=0.5,
             )
 
+        if self.cfg.model_type == "3dgs":
+            self.rasterize_fnc = rasterization
+        elif self.cfg.model_type == "2dgs":
+            self.rasterize_fnc = rasterization_2dgs
+
+    def rasterize_splats(
+        self,
+    ) -> Tuple[Tensor, Tensor, Dict]:
+        means = self.splats["means"]  # [N, 3]
+        # quats = F.normalize(self.splats["quats"], dim=-1)  # [N, 4]
+        # rasterization does normalization internally
+        quats = self.splats["quats"]  # [N, 4]
+        quats = quats / quats.norm(dim=-1, keepdim=True)
+        scales = torch.exp(self.splats["scales"])  # [N, 3]
+        opacities = torch.sigmoid(self.splats["opacities"])  # [N,]
+        colors = torch.sigmoid(self.splats["rgbs"])
+
+        render_colors, render_alphas, info = self.rasterize_fnc(
+            means=means,
+            quats=quats,
+            scales=scales,
+            opacities=opacities,
+            colors=colors,
+            viewmats=self.viewmat[None],  # [C, 4, 4]
+            Ks=self.K[None],  # [C, 3, 3]
+            width=self.H,
+            height=self.W,
+            packed=False,
+        )
+        return render_colors, render_alphas, info
+
+    def create_splats_with_optimizers(self):
+        """Random gaussians"""
+        bd = 2
+
+        means = bd * (torch.rand(self.num_points, 3, device=self.device) - 0.5)
+        scales = torch.rand(self.num_points, 3, device=self.device)
+        d = 3
+        rgbs = torch.rand(self.num_points, d, device=self.device)
+
+        u = torch.rand(self.num_points, 1, device=self.device)
+        v = torch.rand(self.num_points, 1, device=self.device)
+        w = torch.rand(self.num_points, 1, device=self.device)
+
+        quats = torch.cat(
+            [
+                torch.sqrt(1.0 - u) * torch.sin(2.0 * math.pi * v),
+                torch.sqrt(1.0 - u) * torch.cos(2.0 * math.pi * v),
+                torch.sqrt(u) * torch.sin(2.0 * math.pi * w),
+                torch.sqrt(u) * torch.cos(2.0 * math.pi * w),
+            ],
+            -1,
+        )
+        opacities = torch.ones((self.num_points), device=self.device)
+
+        params = [
+            # name, value, lr
+            ("means", torch.nn.Parameter(means), self.cfg.lr),
+            ("scales", torch.nn.Parameter(scales), self.cfg.lr),
+            ("quats", torch.nn.Parameter(quats), self.cfg.lr),
+            ("opacities", torch.nn.Parameter(opacities), self.cfg.lr),
+            ("rgbs", torch.nn.Parameter(rgbs), self.cfg.lr),
+        ]
+        splats = torch.nn.ParameterDict({n: v for n, v, _ in params}).to(self.device)
+        optimizers = {
+            name: torch.optim.Adam([{"params": splats[name], "lr": lr, "name": name}])
+            for name, _, lr in params
+        }
+
+        self.viewmat = torch.tensor(
+            [
+                [1.0, 0.0, 0.0, 0.0],
+                [0.0, 1.0, 0.0, 0.0],
+                [0.0, 0.0, 1.0, 8.0],
+                [0.0, 0.0, 0.0, 1.0],
+            ],
+            device=self.device,
+        )
+        self.viewmat.requires_grad = False
+        self.K = torch.tensor(
+            [
+                [self.focal, 0, self.W / 2],
+                [0, self.focal, self.H / 2],
+                [0, 0, 1],
+            ],
+            device=self.device,
+        )
+        return splats, optimizers
+
+    def load_splats_with_optimizers(self):
+        ckpt = torch.load(self.cfg.ckpt_path, weights_only=False)
+
+        splats, _ = self.create_splats_with_optimizers()
+
+        for k in splats.keys():
+            splats[k].data = ckpt["splats"][k]
+
+        optimizers = {
+            name: torch.optim.Adam(
+                [{"params": splats[name], "lr": self.cfg.lr, "name": name}]
+            )
+            for name in splats.keys()
+        }
+        self.viewmat = torch.tensor(
+            [
+                [1.0, 0.0, 0.0, 0.0],
+                [0.0, 1.0, 0.0, 0.0],
+                [0.0, 0.0, 1.0, 8.0],
+                [0.0, 0.0, 0.0, 1.0],
+            ],
+            device=self.device,
+        )
+        self.viewmat.requires_grad = False
+
+        self.K = torch.tensor(
+            [
+                [self.focal, 0, self.W / 2],
+                [0, self.focal, self.H / 2],
+                [0, 0, 1],
+            ],
+            device=self.device,
+        )
+        self.strategy_state = ckpt["strategy_state"]
+        return splats, optimizers
+
     def set_linear_time_strategy(
         self, output_shape, min_diffusion_steps=20, max_diffusion_steps=980
     ):
@@ -149,96 +271,19 @@ class SimpleTrainer:
         step = max_step - (max_step - min_step) * math.sqrt(iter_frac)
         return int(step)
 
-    def _load_gaussians(self, ckpt_path):
-        ckpt = torch.load(ckpt_path, weights_only=False)
-        print(f"Loading checkpoint {ckpt_path}")
-        self.opacities = ckpt["opacities"]
-        self.quats = ckpt["quats"]
-        self.rgbs = ckpt["rgbs"]
-        self.scales = ckpt["scales"]
-        self.means = ckpt["means"]
-        self.iter = ckpt["iter"]
-        self.frames = ckpt["frames"]
-
-        self.optimizer_state_dict = ckpt["optimizer"]
-        self.viewmat = torch.tensor(
-            [
-                [1.0, 0.0, 0.0, 0.0],
-                [0.0, 1.0, 0.0, 0.0],
-                [0.0, 0.0, 1.0, 8.0],
-                [0.0, 0.0, 0.0, 1.0],
-            ],
-            device=self.device,
-        )
-
-    def _init_gaussians(self):
-        """Random gaussians"""
-        bd = 2
-
-        self.means = bd * (torch.rand(self.num_points, 3, device=self.device) - 0.5)
-        self.scales = torch.rand(self.num_points, 3, device=self.device)
-        d = 3
-        self.rgbs = torch.rand(self.num_points, d, device=self.device)
-
-        u = torch.rand(self.num_points, 1, device=self.device)
-        v = torch.rand(self.num_points, 1, device=self.device)
-        w = torch.rand(self.num_points, 1, device=self.device)
-
-        self.quats = torch.cat(
-            [
-                torch.sqrt(1.0 - u) * torch.sin(2.0 * math.pi * v),
-                torch.sqrt(1.0 - u) * torch.cos(2.0 * math.pi * v),
-                torch.sqrt(u) * torch.sin(2.0 * math.pi * w),
-                torch.sqrt(u) * torch.cos(2.0 * math.pi * w),
-            ],
-            -1,
-        )
-        self.opacities = torch.ones((self.num_points), device=self.device)
-
-        self.viewmat = torch.tensor(
-            [
-                [1.0, 0.0, 0.0, 0.0],
-                [0.0, 1.0, 0.0, 0.0],
-                [0.0, 0.0, 1.0, 8.0],
-                [0.0, 0.0, 0.0, 1.0],
-            ],
-            device=self.device,
-        )
-        self.background = torch.zeros(d, device=self.device)
-
-        self.means.requires_grad = True
-        self.scales.requires_grad = True
-        self.quats.requires_grad = True
-        self.rgbs.requires_grad = True
-        self.opacities.requires_grad = True
-        self.viewmat.requires_grad = False
-
     # Calculate gradient norm from optimizer's parameters
     def calculate_grad_norm(self):
         total_norm = 0.0
-        for param_group in self.optimizer.param_groups:
-            for param in param_group["params"]:
-                if param.grad is not None:  # Check if gradient exists
-                    param_norm = param.grad.norm(2)  # L2 norm of the gradient
-                    total_norm += param_norm.item() ** 2
+        for optimizer in self.optimizers.values():
+            for param_group in optimizer.param_groups:
+                for param in param_group["params"]:
+                    if param.grad is not None:  # Check if gradient exists
+                        param_norm = param.grad.norm(2)  # L2 norm of the gradient
+                        total_norm += param_norm.item() ** 2
         return total_norm**0.5  # Return the overall gradient norm
 
     def train(self):
-        frames = self.frames
         times = [0] * 2  # rasterization, backward
-        K = torch.tensor(
-            [
-                [self.focal, 0, self.W / 2],
-                [0, self.focal, self.H / 2],
-                [0, 0, 1],
-            ],
-            device=self.device,
-        )
-
-        if self.cfg.model_type == "3dgs":
-            rasterize_fnc = rasterization
-        elif self.cfg.model_type == "2dgs":
-            rasterize_fnc = rasterization_2dgs
 
         begin = 0
         end = self.cfg.iterations
@@ -249,22 +294,16 @@ class SimpleTrainer:
         self.one_image_dataset.img = self.one_image_dataset.img.to(self.device)
 
         base_render = None
+        if self.strategy_state is None:
+            self.strategy_state = self.cfg.strategy.initialize_state()
 
-        for i in range(begin, end):
+        pbar = tqdm.tqdm(range(begin, end))
+        for i in pbar:
             start = time.time()
-
-            renders = rasterize_fnc(
-                self.means,
-                self.quats / self.quats.norm(dim=-1, keepdim=True),
-                self.scales,
-                torch.sigmoid(self.opacities),
-                torch.sigmoid(self.rgbs),
-                self.viewmat[None],
-                K[None],
-                self.W,
-                self.H,
-                packed=False,
-            )[0]
+            renders, _, info = self.rasterize_splats()
+            self.cfg.strategy.step_pre_backward(
+                self.splats, self.optimizers, self.strategy_state, i, info
+            )
             out_img = renders[0]
             if base_render is None:
                 base_render = out_img.detach().clone()
@@ -337,24 +376,32 @@ class SimpleTrainer:
                 loss = sds
             else:
                 loss = mse_loss
-
-            self.optimizer.zero_grad()
             start = time.time()
             loss.backward()
+
             torch.cuda.synchronize()
             times[1] += time.time() - start
-            self.optimizer.step()
-            if self.lr_scheduler is not None:
-                self.lr_scheduler.step()
+            for optimizer in self.optimizers.values():
+                optimizer.step()
+                optimizer.zero_grad(set_to_none=True)
+
+            self.cfg.strategy.step_post_backward(
+                self.splats, self.optimizers, self.strategy_state, i, info
+            )
+
+            # todo add schedulers back
 
             psnr = self.psnr(out_img, self.one_image_dataset.img.permute(1, 2, 0))
             # stats
             losses.append(loss.item())
             psnrs.append(psnr.item())
             grad_norms.append(self.calculate_grad_norm())
-            learning_rates.append(self.optimizer.param_groups[0]["lr"])
+            # learning rate and scheduling is the same for all params
+            learning_rates.append(self.optimizers["means"].param_groups[0]["lr"])
 
-            print(f"Iteration {i + 1}/{end}, Loss: {loss.item()}, PSNR: {psnr.item()}")
+            pbar.set_description(
+                f"Iteration {i + 1}/{end}, Loss: {loss.item()}, PSNR: {psnr.item()}"
+            )
 
             if i % self.cfg.show_steps == 0 or i == end - 1:
                 if self.cfg.show_plots:
@@ -436,14 +483,8 @@ class SimpleTrainer:
             if i in [idx - 1 for idx in self.cfg.save_steps] or i == end - 1:
                 print(f"Saving checkpoint at: {i}")
                 to_save = {
-                    "optimizer": self.optimizer.state_dict(),
-                    "iter": i,
-                    "means": self.means,
-                    "quats": self.quats,
-                    "opacities": self.opacities,
-                    "rgbs": self.rgbs,
-                    "scales": self.scales,
-                    "frames": frames,
+                    "splats": self.splats.state_dict(),
+                    "strategy_state": self.strategy_state,
                 }
                 frame = (out_img.detach().cpu().numpy() * 255).astype(np.uint8)
                 # also save the last rendering
