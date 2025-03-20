@@ -107,7 +107,7 @@ def different_checkpoints_exp(cfg: Config, default_run_args):
 
 def classic_splat_exps(cfg: Config):
     result_dir = "results_2d_classic_256x256_upscaled_pruning"
-    iterations = 1_000
+    iterations = 30_000
     classic_run_args = [
         "python3 simple_trainer_2d.py",
         f"--img-path {IMG_PATH}",
@@ -304,8 +304,8 @@ def main(
     # modify parameters for testing
     cfg.base_render_as_cond = True
     cfg.use_sds_loss = True
-    cfg.width = 64
-    cfg.height = 64
+    cfg.width = 256
+    cfg.height = 256
     cfg.use_fused_loss = False
     cfg.use_downscaled_mse_loss = False
     # cfg.collapsing_noise_scheduler = True

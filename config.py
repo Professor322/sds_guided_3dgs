@@ -45,5 +45,6 @@ class Config:
     guidance_scale: float = 10.0
     use_classic_mse_loss: bool = False
     use_downscaled_mse_loss: bool = False
+    use_strategy: bool = False
     # for pruning
     strategy: DefaultStrategy = field(default_factory=DefaultStrategy)

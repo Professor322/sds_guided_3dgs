@@ -78,7 +78,10 @@ class SimpleTrainer:
 
     def __init__(self, cfg: Config = Config()):
         self.cfg = cfg
-        self.cfg.strategy = DefaultStrategy(verbose=True)
+        if self.cfg.use_strategy:
+            self.cfg.strategy = DefaultStrategy(verbose=True)
+        else:
+            self.cfg.strategy = NotImplementedError
         self.strategy_state = None
         self.device = torch.device("cuda:0")
         print(f"Loading dataset...")
@@ -107,7 +110,8 @@ class SimpleTrainer:
             self.splats, self.optimizers = self.load_splats_with_optimizers()
         else:
             self.splats, self.optimizers = self.create_splats_with_optimizers()
-        self.cfg.strategy.check_sanity(self.splats, self.optimizers)
+        if self.cfg.use_strategy:
+            self.cfg.strategy.check_sanity(self.splats, self.optimizers)
         print("Model initialized. Number of GS:", len(self.splats["means"]))
 
         if self.cfg.use_sds_loss or self.cfg.use_sdi_loss:
@@ -294,16 +298,17 @@ class SimpleTrainer:
         self.one_image_dataset.img = self.one_image_dataset.img.to(self.device)
 
         base_render = None
-        if self.strategy_state is None:
+        if self.cfg.use_strategy and self.strategy_state is None:
             self.strategy_state = self.cfg.strategy.initialize_state()
 
         pbar = tqdm.tqdm(range(begin, end))
         for i in pbar:
             start = time.time()
             renders, _, info = self.rasterize_splats()
-            self.cfg.strategy.step_pre_backward(
-                self.splats, self.optimizers, self.strategy_state, i, info
-            )
+            if self.cfg.use_strategy:
+                self.cfg.strategy.step_pre_backward(
+                    self.splats, self.optimizers, self.strategy_state, i, info
+                )
             out_img = renders[0]
             if base_render is None:
                 base_render = out_img.detach().clone()
@@ -385,9 +390,10 @@ class SimpleTrainer:
                 optimizer.step()
                 optimizer.zero_grad(set_to_none=True)
 
-            self.cfg.strategy.step_post_backward(
-                self.splats, self.optimizers, self.strategy_state, i, info
-            )
+            if cfg.use_strategy:
+                self.cfg.strategy.step_post_backward(
+                    self.splats, self.optimizers, self.strategy_state, i, info
+                )
 
             # todo add schedulers back
 
@@ -484,7 +490,6 @@ class SimpleTrainer:
                 print(f"Saving checkpoint at: {i}")
                 to_save = {
                     "splats": self.splats.state_dict(),
-                    "strategy_state": self.strategy_state,
                 }
                 frame = (out_img.detach().cpu().numpy() * 255).astype(np.uint8)
                 # also save the last rendering
