@@ -40,7 +40,7 @@ SBATCH_FILENAME = "2d_training_generated.sbatch"
 
 def different_checkpoints_exp(cfg: Config, default_run_args):
     # checkpoints = [999, 2999, 6999, 29999]
-    checkpoints = [499, 699]
+    checkpoints = [999, 2999]
     easy_prompt = "bicycle"
     hard_prompt = (
         "A surreal outdoor scene featuring a "
@@ -72,6 +72,9 @@ def different_checkpoints_exp(cfg: Config, default_run_args):
                     result_dir += (
                         f"_prompt_guidance_{str(guidance_scale).replace('.', '_')}"
                     )
+                    if cfg.use_strategy:
+                        result_dir += "_pruning" if cfg.use_strategy else ""
+                        current_run_args.append("--use-strategy")
                     if cfg.use_sdi_loss:
                         result_dir += "_sdi_loss"
                     if cfg.use_downscaled_mse_loss:
@@ -327,8 +330,8 @@ def main(
         # "--use-fused-loss",
     ]
     result_dirs = []
-    # result_dirs += different_checkpoints_exp(cfg, default_run_args)
-    result_dirs += classic_splat_exps(cfg)
+    result_dirs += different_checkpoints_exp(cfg, default_run_args)
+    # result_dirs += classic_splat_exps(cfg)
     # result_dirs += simple_experiments(cfg, default_run_args)
     # result_dirs += noise_levels_exps(cfg, default_run_args)
     # result_dirs += prompts_and_guidance_exps(cfg, default_run_args)
