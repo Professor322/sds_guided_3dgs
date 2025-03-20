@@ -313,7 +313,7 @@ def main(
     cfg.height = 256
     cfg.use_fused_loss = False
     cfg.use_downscaled_mse_loss = False
-    cfg.use_strategy = True
+    cfg.use_strategy = False
     # cfg.collapsing_noise_scheduler = True
     # cfg.use_lr_scheduler = True
     # cfg.use_sdi_loss = True
