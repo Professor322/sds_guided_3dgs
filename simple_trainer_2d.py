@@ -79,7 +79,9 @@ class SimpleTrainer:
     def __init__(self, cfg: Config = Config()):
         self.cfg = cfg
         if self.cfg.use_strategy:
-            self.cfg.strategy = DefaultStrategy(verbose=True)
+            self.cfg.strategy = DefaultStrategy(
+                verbose=True, refine_every=200, reset_every=50_000
+            )
         else:
             self.cfg.strategy = NotImplementedError
         self.strategy_state = None

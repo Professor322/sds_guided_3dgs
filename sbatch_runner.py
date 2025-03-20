@@ -39,7 +39,8 @@ SBATCH_FILENAME = "2d_training_generated.sbatch"
 
 
 def different_checkpoints_exp(cfg: Config, default_run_args):
-    checkpoints = [999, 2999, 6999, 29999]
+    # checkpoints = [999, 2999, 6999, 29999]
+    checkpoints = [499, 699]
     easy_prompt = "bicycle"
     hard_prompt = (
         "A surreal outdoor scene featuring a "
@@ -63,9 +64,8 @@ def different_checkpoints_exp(cfg: Config, default_run_args):
             for noise_level in noise_levels:
                 for guidance_scale in guidance_scales:
                     current_run_args = default_run_args.copy()
-                    current_run_args.append(
-                        f"--ckpt-path /home/nskochetkov/sds_guided_3dgs/results_2d_classic_from_render_hard_prompt/ckpts/ckpt_{checkpoint}.pt"
-                    )
+                    checkpoint_path = f"results_2d_classic_{cfg.width}x{cfg.height}_{'upscaled' if 'render' in IMG_PATH else 'original'}/ckpts/ckpt_{checkpoint}.pt"
+                    current_run_args.append(f"--ckpt-path {checkpoint_path}")
                     is_easy_prompt = len(prompt.split(" ")) == 1
                     result_dir = f"results_2d_low_res_noise_level_{str(noise_level).replace('.', '_')}_{checkpoint}_{cfg.height}x{cfg.width}_upscaled"
                     result_dir += f'_{"easy" if is_easy_prompt else "hard"}'
@@ -107,6 +107,7 @@ def different_checkpoints_exp(cfg: Config, default_run_args):
 
 def classic_splat_exps(cfg: Config):
     result_dir = f"results_2d_classic_{cfg.width}x{cfg.height}_{'upscaled' if 'render' in IMG_PATH else 'original'}"
+    result_dir += f"{'_pruning' if cfg.use_strategy else ''}"
     iterations = 30_000
     classic_run_args = [
         "python3 simple_trainer_2d.py",
@@ -116,6 +117,7 @@ def classic_splat_exps(cfg: Config):
         f"--height {cfg.height}",
         f"--results-dir {result_dir}",
         f"--use-classic-mse_loss",
+        "--use-strategy" if cfg.use_strategy else "",
     ]
     file_content = (
         SBATCH_TEMPLATE + "\n" + f"echo '{result_dir}'\n" + " ".join(classic_run_args)
@@ -308,6 +310,7 @@ def main(
     cfg.height = 256
     cfg.use_fused_loss = False
     cfg.use_downscaled_mse_loss = False
+    cfg.use_strategy = True
     # cfg.collapsing_noise_scheduler = True
     # cfg.use_lr_scheduler = True
     # cfg.use_sdi_loss = True
