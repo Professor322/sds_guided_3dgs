@@ -40,7 +40,7 @@ SBATCH_FILENAME = "2d_training_generated.sbatch"
 
 def different_checkpoints_exp(cfg: Config, default_run_args):
     # checkpoints = [999, 2999, 6999, 29999]
-    checkpoints = [999, 2999]
+    checkpoints = [499, 699]
     easy_prompt = "bicycle"
     hard_prompt = (
         "A surreal outdoor scene featuring a "

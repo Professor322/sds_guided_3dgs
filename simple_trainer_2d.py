@@ -261,7 +261,6 @@ class SimpleTrainer:
             ],
             device=self.device,
         )
-        self.strategy_state = ckpt["strategy_state"]
         return splats, optimizers
 
     def set_linear_time_strategy(
