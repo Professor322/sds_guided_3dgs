@@ -48,3 +48,4 @@ class Config:
     use_strategy: bool = False
     # for pruning
     strategy: DefaultStrategy = field(default_factory=DefaultStrategy)
+    validate: bool = False

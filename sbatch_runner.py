@@ -108,6 +108,93 @@ def different_checkpoints_exp(cfg: Config, default_run_args):
     return result_dirs
 
 
+def classic_splats_with_validation(cfg: Config):
+    result_dir = f"results_2d_classic_{cfg.width}x{cfg.height}"
+    iterations = 10_000
+    params = [
+        # to train downscaled bicycle
+        {
+            "resolution": (64, 64),
+            "img_path": "data/360_v2/bicycle/images_8/_DSC8679.JPG",
+        },
+        # to train original one
+        {
+            "resolution": (256, 256),
+            "img_path": "data/360_v2/bicycle/images_8/_DSC8679.JPG",
+        },
+        # to train on upscaled bicycle 64->256 using SR model
+        {"resolution": (256, 256), "img_path": "render_bicycle_hard_prompt.png"},
+        # to train on upscaled bicycle 64->256 using interpolation
+        {"resolution": (256, 256), "img_path": "interpolated_bicycle.png"},
+    ]
+    classic_run_args = [
+        "python3 simple_trainer_2d.py",
+        f"--iterations {iterations}",
+        f"--use-classic-mse_loss",
+    ]
+    result_dirs = []
+    # first start a batch of training
+    for param in params:
+        current_run_args = classic_run_args.copy()
+        width, height = param["resolution"]
+        img_path = param["img_path"]
+        if "interpolated" in img_path:
+            image_type = "upscale_interpolated"
+        elif "render" in img_path:
+            image_type = "upscale_sr"
+        else:
+            image_type = "original"
+        result_dir = f"results_2d_classic_{cfg.width}x{cfg.height}_{image_type}"
+
+        current_run_args.append(f"--width {width}")
+        current_run_args.append(f"--height {height}")
+        current_run_args.append(f"--img-path {img_path}")
+        current_run_args.append(f"--results-dir {result_dir}")
+        result_dirs.append(result_dir)
+        file_content = (
+            SBATCH_TEMPLATE
+            + "\n"
+            + f"echo '{result_dir}'\n"
+            + " ".join(current_run_args)
+        )
+        if DEBUG:
+            print(file_content)
+        with open(SBATCH_FILENAME, "w") as file:
+            file.write(file_content)
+        if not DEBUG and not GET_PLOTS and not TOP_PSNRS:
+            os.system(f"sbatch {SBATCH_FILENAME}")
+
+    # validate on the original image downscaled to 256x256
+    validataion_width = 256
+    validation_height = 256
+    validation_img_path = "data/360_v2/bicycle/images_8/_DSC8679.JPG"
+    # then start a batch of validations
+    for result_dir in result_dirs:
+        current_run_args = classic_run_args.copy()
+        checkpoint_path = f"{result_dir}/ckpts/ckpt_{iterations - 1}.pt"
+        current_run_args.append(f"--ckpt-path {checkpoint_path}")
+        current_run_args.append(f"--width {validataion_width}")
+        current_run_args.append(f"--height {validation_height}")
+        current_run_args.append(f"--img-path {validation_img_path}")
+        current_run_args.append(f"--results-dir {result_dir}")
+        current_run_args.append("--validate")
+
+        file_content = (
+            SBATCH_TEMPLATE
+            + "\n"
+            + f"echo '{result_dir}'\n"
+            + " ".join(current_run_args)
+        )
+        if DEBUG:
+            print(file_content)
+        with open(SBATCH_FILENAME, "w") as file:
+            file.write(file_content)
+        if not DEBUG and not GET_PLOTS and not TOP_PSNRS:
+            os.system(f"sbatch {SBATCH_FILENAME}")
+
+        return result_dirs
+
+
 def classic_splat_exps(cfg: Config):
     result_dir = f"results_2d_classic_{cfg.width}x{cfg.height}_{'upscaled' if 'render' in IMG_PATH else 'original'}"
     result_dir += f"{'_pruning' if cfg.use_strategy else ''}"
@@ -330,7 +417,8 @@ def main(
         # "--use-fused-loss",
     ]
     result_dirs = []
-    result_dirs += different_checkpoints_exp(cfg, default_run_args)
+    result_dirs += classic_splats_with_validation(cfg)
+    # result_dirs += different_checkpoints_exp(cfg, default_run_args)
     # result_dirs += classic_splat_exps(cfg)
     # result_dirs += simple_experiments(cfg, default_run_args)
     # result_dirs += noise_levels_exps(cfg, default_run_args)

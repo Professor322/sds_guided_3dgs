@@ -106,7 +106,6 @@ class SimpleTrainer:
             1
         ), self.one_image_dataset.img.size(2)
         self.focal = 0.5 * float(self.W) / math.tan(0.5 * fov_x)
-        self.img_size = torch.tensor([self.W, self.H, 1], device=self.device)
 
         if self.cfg.ckpt_path:
             self.splats, self.optimizers = self.load_splats_with_optimizers()
@@ -230,6 +229,7 @@ class SimpleTrainer:
         return splats, optimizers
 
     def load_splats_with_optimizers(self):
+        print(f"Loading checkpoint {self.cfg.ckpt_path}")
         ckpt = torch.load(self.cfg.ckpt_path, weights_only=False)
 
         splats, _ = self.create_splats_with_optimizers()
@@ -269,6 +269,21 @@ class SimpleTrainer:
                         param_norm = param.grad.norm(2)  # L2 norm of the gradient
                         total_norm += param_norm.item() ** 2
         return total_norm**0.5  # Return the overall gradient norm
+
+    def validate(self):
+        print("Validating...")
+        with torch.no_grad():
+            self.one_image_dataset.img = self.one_image_dataset.img.to(self.device)
+            renders, _, _ = self.rasterize_splats()
+            out_img = renders[0]
+            frame = (out_img.detach().cpu().numpy() * 255).astype(np.uint8)
+            Image.fromarray(frame).save(f"{self.render_dir}/render.png")
+            psnr_with_original = self.psnr(
+                out_img, self.one_image_dataset.img.permute(1, 2, 0)
+            )
+            print(f"PSNR with original: {psnr_with_original.item()}")
+            with open(f"{self.stats_dir}/render.json", "w") as f:
+                json.dump({"psnr": psnr_with_original.item()}, f)
 
     def train(self):
         times = [0] * 2  # rasterization, backward
@@ -493,7 +508,10 @@ def main(
 ) -> None:
 
     trainer = SimpleTrainer(cfg=cfg)
-    trainer.train()
+    if cfg.validate:
+        trainer.validate()
+    else:
+        trainer.train()
 
 
 if __name__ == "__main__":
