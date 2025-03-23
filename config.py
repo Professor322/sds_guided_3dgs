@@ -18,7 +18,7 @@ class Config:
     img_path: str = ""
     ckpt_path: str = ""
     results_dir: str = "results_2d"
-    show_steps: int = 50
+    show_steps: int = 200
     use_sds_loss: bool = False
     use_sdi_loss: bool = False
     use_fused_loss: bool = False

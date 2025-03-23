@@ -217,7 +217,6 @@ class SimpleTrainer:
             ],
             device=self.device,
         )
-        self.viewmat.requires_grad = False
         self.K = torch.tensor(
             [
                 [self.focal, 0, self.W / 2],
@@ -226,6 +225,8 @@ class SimpleTrainer:
             ],
             device=self.device,
         )
+        self.K.requires_grad = False
+        self.viewmat.requires_grad = False
         return splats, optimizers
 
     def load_splats_with_optimizers(self):
@@ -242,25 +243,7 @@ class SimpleTrainer:
             )
             for name in splats.keys()
         }
-        self.viewmat = torch.tensor(
-            [
-                [1.0, 0.0, 0.0, 0.0],
-                [0.0, 1.0, 0.0, 0.0],
-                [0.0, 0.0, 1.0, 8.0],
-                [0.0, 0.0, 0.0, 1.0],
-            ],
-            device=self.device,
-        )
-        self.viewmat.requires_grad = False
 
-        self.K = torch.tensor(
-            [
-                [self.focal, 0, self.W / 2],
-                [0, self.focal, self.H / 2],
-                [0, 0, 1],
-            ],
-            device=self.device,
-        )
         return splats, optimizers
 
     def set_linear_time_strategy(
@@ -387,9 +370,6 @@ class SimpleTrainer:
 
             torch.cuda.synchronize()
             times[1] += time.time() - start
-            for optimizer in self.optimizers.values():
-                optimizer.step()
-                optimizer.zero_grad(set_to_none=True)
 
             if cfg.use_strategy:
                 self.cfg.strategy.step_post_backward(
@@ -397,7 +377,6 @@ class SimpleTrainer:
                 )
 
             # todo add schedulers back
-
             psnr = self.psnr(out_img, self.one_image_dataset.img.permute(1, 2, 0))
             # stats
             losses.append(loss.item())
@@ -405,6 +384,10 @@ class SimpleTrainer:
             grad_norms.append(self.calculate_grad_norm())
             # learning rate and scheduling is the same for all params
             learning_rates.append(self.optimizers["means"].param_groups[0]["lr"])
+
+            for optimizer in self.optimizers.values():
+                optimizer.step()
+                optimizer.zero_grad(set_to_none=True)
 
             pbar.set_description(
                 f"Iteration {i + 1}/{end}, Loss: {loss.item()}, PSNR: {psnr.item()}"
