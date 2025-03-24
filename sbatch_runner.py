@@ -110,7 +110,7 @@ def different_checkpoints_exp(cfg: Config, default_run_args):
 
 def classic_splats_with_validation(cfg: Config):
     result_dir = f"results_2d_classic_{cfg.width}x{cfg.height}"
-    iterations = 10_000
+    iterations = 30_000
     params = [
         # to train downscaled bicycle
         {
@@ -144,7 +144,7 @@ def classic_splats_with_validation(cfg: Config):
             image_type = "upscale_sr"
         else:
             image_type = "original"
-        result_dir = f"results_2d_classic_{cfg.width}x{cfg.height}_{image_type}"
+        result_dir = f"results_2d_classic_{width}x{width}_{image_type}"
 
         current_run_args.append(f"--width {width}")
         current_run_args.append(f"--height {height}")
