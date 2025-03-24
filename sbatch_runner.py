@@ -109,7 +109,11 @@ def different_checkpoints_exp(cfg: Config, default_run_args):
 
 
 def classic_splats_with_validation(cfg: Config):
-    result_dir = f"results_2d_classic_{cfg.width}x{cfg.height}"
+    # validate on the original image downscaled to 256x256
+    validataion_width = 256
+    validation_height = 256
+    validation_img_path = "data/360_v2/bicycle/images_8/_DSC8679.JPG"
+
     iterations = 30_000
     params = [
         # to train downscaled bicycle
@@ -135,6 +139,7 @@ def classic_splats_with_validation(cfg: Config):
     result_dirs = []
     # first start a batch of training
     for param in params:
+        # execution
         current_run_args = classic_run_args.copy()
         width, height = param["resolution"]
         img_path = param["img_path"]
@@ -151,39 +156,26 @@ def classic_splats_with_validation(cfg: Config):
         current_run_args.append(f"--img-path {img_path}")
         current_run_args.append(f"--results-dir {result_dir}")
         result_dirs.append(result_dir)
-        file_content = (
-            SBATCH_TEMPLATE
-            + "\n"
-            + f"echo '{result_dir}'\n"
-            + " ".join(current_run_args)
-        )
-        if DEBUG:
-            print(file_content)
-        with open(SBATCH_FILENAME, "w") as file:
-            file.write(file_content)
-        if not DEBUG and not GET_PLOTS and not TOP_PSNRS:
-            os.system(f"sbatch {SBATCH_FILENAME}")
 
-    # validate on the original image downscaled to 256x256
-    validataion_width = 256
-    validation_height = 256
-    validation_img_path = "data/360_v2/bicycle/images_8/_DSC8679.JPG"
-    # then start a batch of validations
-    for result_dir in result_dirs:
-        current_run_args = classic_run_args.copy()
+        # validatation
+        validation_run_args = classic_run_args.copy()
         checkpoint_path = f"{result_dir}/ckpts/ckpt_{iterations - 1}.pt"
-        current_run_args.append(f"--ckpt-path {checkpoint_path}")
-        current_run_args.append(f"--width {validataion_width}")
-        current_run_args.append(f"--height {validation_height}")
-        current_run_args.append(f"--img-path {validation_img_path}")
-        current_run_args.append(f"--results-dir {result_dir}")
-        current_run_args.append("--validate")
+        validation_run_args.append(f"--ckpt-path {checkpoint_path}")
+        validation_run_args.append(f"--width {validataion_width}")
+        validation_run_args.append(f"--height {validation_height}")
+        validation_run_args.append(f"--img-path {validation_img_path}")
+        validation_run_args.append(f"--results-dir {result_dir}")
+        validation_run_args.append("--validate")
 
         file_content = (
             SBATCH_TEMPLATE
             + "\n"
             + f"echo '{result_dir}'\n"
+            + "srun "
             + " ".join(current_run_args)
+            + "\n"
+            + "srun "
+            + " ".join(validation_run_args)
         )
         if DEBUG:
             print(file_content)
@@ -192,7 +184,7 @@ def classic_splats_with_validation(cfg: Config):
         if not DEBUG and not GET_PLOTS and not TOP_PSNRS:
             os.system(f"sbatch {SBATCH_FILENAME}")
 
-        return result_dirs
+    return result_dirs
 
 
 def classic_splat_exps(cfg: Config):
