@@ -215,8 +215,8 @@ def classic_splat_exps(cfg: Config):
 
 
 def new_noise_levels_exps(cfg: Config, default_run_args):
-    noise_levels = [0.01, 0.05, 0.01]
-    checkpoints = [499, 699, 999, 2999, 6999, 29999]
+    noise_levels = [0.01, 0.05, 0.1]
+    checkpoints = [2999, 6999, 29999]
     result_dirs = []
     min_step = 10
     max_step = 50
@@ -232,6 +232,11 @@ def new_noise_levels_exps(cfg: Config, default_run_args):
             if cfg.base_render_as_cond:
                 current_run_args.append("--base-render-as-cond")
                 result_dir += "_base_render_as_cond"
+            if cfg.use_downscaled_mse_loss:
+                current_run_args.append(f"--use-downscaled-mse-loss")
+                result_dir += "_downscaled_mse_loss"
+            if cfg.use_fused_loss:
+                result_dir += "_fused_loss"
             current_run_args.append(f"--lowres-noise-level {noise_level}")
             current_run_args.append(f"--results-dir {result_dir}")
             current_run_args.append(f"--min-noise-step {min_step}")
@@ -428,8 +433,8 @@ def main(
     cfg.use_sds_loss = True
     cfg.width = 64
     cfg.height = 64
-    cfg.use_fused_loss = False
-    cfg.use_downscaled_mse_loss = False
+    cfg.use_fused_loss = True
+    cfg.use_downscaled_mse_loss = True
     cfg.use_strategy = False
     # cfg.collapsing_noise_scheduler = True
     # cfg.use_lr_scheduler = True
