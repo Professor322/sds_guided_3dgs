@@ -440,7 +440,7 @@ class SimpleTrainer:
 
                 # Plot 4: PSNR Evolution
                 axes[1, 0].plot(psnrs, label="PSNR")
-                axes[1, 0].set_title("PSNR")
+                axes[1, 0].set_title("PSNR with original image")
                 axes[1, 0].set_xlabel("Epoch")
                 axes[1, 0].set_ylabel("PSNR (dB)")
                 axes[1, 0].grid(True)
