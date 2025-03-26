@@ -5,8 +5,8 @@ import json
 import glob
 
 CHECKPOINT = 2999
-# IMG_PATH = "data/360_v2/bicycle/images_8/_DSC8679.JPG"
-IMG_PATH = "render_bicycle_hard_prompt.png"
+IMG_PATH = "data/360_v2/bicycle/images_8/_DSC8679.JPG"
+# IMG_PATH = "render_bicycle_hard_prompt.png"
 CHECKPOINT_PATH = (
     f"/home/nskochetkov/sds_guided_3dgs/results_2d/ckpts/ckpt_{CHECKPOINT}.pt"
 )
@@ -14,8 +14,8 @@ MAX_STEP = 980
 MIN_STEP = 20
 ITERATIONS = 1_000
 # sometimes can hit oom, so we have to reduce it
-BATCH_SIZE = 24
-DEBUG = False
+BATCH_SIZE = 1
+DEBUG = True
 GET_PLOTS = False
 TOP_PSNRS = False
 
@@ -127,7 +127,7 @@ def classic_splats_with_validation(cfg: Config):
             "img_path": "data/360_v2/bicycle/images_8/_DSC8679.JPG",
         },
         # to train on upscaled bicycle 64->256 using SR model
-        {"resolution": (256, 256), "img_path": "render_bicycle_hard_prompt.png"},
+        {"resolution": (256, 256), "img_path": "render_bicycle_hard_prompt_25.png"},
         # to train on upscaled bicycle 64->256 using interpolation
         {"resolution": (256, 256), "img_path": "interpolated_bicycle.png"},
     ]
@@ -212,6 +212,44 @@ def classic_splat_exps(cfg: Config):
         os.system(f"sbatch {SBATCH_FILENAME}")
 
     return [result_dir]
+
+
+def new_noise_levels_exps(cfg: Config, default_run_args):
+    noise_levels = [0.01, 0.05, 0.01]
+    checkpoints = [499, 699, 999, 2999, 6999, 29999]
+    result_dirs = []
+    min_step = 10
+    max_step = 50
+    for noise_level in noise_levels:
+        for checkpoint in checkpoints:
+            current_run_args = default_run_args.copy()
+            checkpoint_path = f"results_2d_classic_{cfg.width}x{cfg.height}"
+            checkpoint_path += f"_original/ckpts/ckpt_{checkpoint}.pt"
+            current_run_args.append(f"--ckpt-path {checkpoint_path}")
+            result_dir = f"results_2d_low_res_noise_level_{str(noise_level).replace('.', '_')}_{checkpoint}_min{min_step}_max{max_step}"
+            if cfg.use_sdi_loss:
+                result_dir += "_sdi_loss"
+            if cfg.base_render_as_cond:
+                current_run_args.append("--base-render-as-cond")
+                result_dir += "_base_render_as_cond"
+            current_run_args.append(f"--lowres-noise-level {noise_level}")
+            current_run_args.append(f"--results-dir {result_dir}")
+            current_run_args.append(f"--min-noise-step {min_step}")
+            current_run_args.append(f"--max-noise-step {max_step}")
+            file_content = (
+                SBATCH_TEMPLATE
+                + "\n"
+                + f"echo '{result_dir}'\n"
+                + " ".join(current_run_args)
+            )
+            result_dirs.append(result_dir)
+            if DEBUG:
+                print(file_content)
+            with open(SBATCH_FILENAME, "w") as file:
+                file.write(file_content)
+            if not DEBUG and not GET_PLOTS and not TOP_PSNRS:
+                os.system(f"sbatch {SBATCH_FILENAME}")
+    return result_dirs
 
 
 def noise_levels_exps(cfg: Config, default_run_args):
@@ -388,8 +426,8 @@ def main(
     # modify parameters for testing
     cfg.base_render_as_cond = True
     cfg.use_sds_loss = True
-    cfg.width = 256
-    cfg.height = 256
+    cfg.width = 64
+    cfg.height = 64
     cfg.use_fused_loss = False
     cfg.use_downscaled_mse_loss = False
     cfg.use_strategy = False
@@ -402,14 +440,15 @@ def main(
         f"--img-path {IMG_PATH}",
         f"--iterations {ITERATIONS}",
         f"--num-points {cfg.num_points}",
-        f"--max-noise-step {MAX_STEP}",
-        f"--min-noise-step {MIN_STEP}",
+        # f"--max-noise-step {MAX_STEP}",
+        # f"--min-noise-step {MIN_STEP}",
         f"--batch-size {BATCH_SIZE}",
         "--use-sds-loss" if cfg.use_sds_loss else "--use-sdi-loss",
         # "--use-fused-loss",
     ]
     result_dirs = []
-    result_dirs += classic_splats_with_validation(cfg)
+    result_dirs += new_noise_levels_exps(cfg, default_run_args)
+    # result_dirs += classic_splats_with_validation(cfg)
     # result_dirs += different_checkpoints_exp(cfg, default_run_args)
     # result_dirs += classic_splat_exps(cfg)
     # result_dirs += simple_experiments(cfg, default_run_args)
