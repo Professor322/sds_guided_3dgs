@@ -15,7 +15,7 @@ MIN_STEP = 20
 ITERATIONS = 1_000
 # sometimes can hit oom, so we have to reduce it
 BATCH_SIZE = 1
-DEBUG = True
+DEBUG = False
 GET_PLOTS = False
 TOP_PSNRS = False
 
