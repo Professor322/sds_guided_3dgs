@@ -241,6 +241,8 @@ def new_noise_levels_exps(cfg: Config, default_run_args):
             current_run_args.append(f"--results-dir {result_dir}")
             current_run_args.append(f"--min-noise-step {min_step}")
             current_run_args.append(f"--max-noise-step {max_step}")
+            current_run_args.append(f"--width {cfg.width}")
+            current_run_args.append(f"--height {cfg.height}")
             file_content = (
                 SBATCH_TEMPLATE
                 + "\n"
