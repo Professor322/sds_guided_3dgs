@@ -29,6 +29,13 @@ from PIL import Image
 from config import Config
 import tqdm
 from gsplat.strategy import DefaultStrategy
+from enum import Enum
+
+
+class LossType(Enum):
+    MSE: int = 0
+    SDS: int = 1
+    UNKNOWN: int = 2
 
 
 class OneImageDataset(Dataset):
@@ -100,6 +107,7 @@ class SimpleTrainer:
         os.makedirs(self.render_dir, exist_ok=True)
 
         self.psnr = PeakSignalNoiseRatio(data_range=1.0).to(self.device)
+        self.ssim = StructuralSimilarityIndexMeasure(data_range=1.0).to(self.device)
 
         fov_x = math.pi / 2.0
         self.H, self.W = self.one_image_dataset.img.size(
@@ -292,6 +300,7 @@ class SimpleTrainer:
         end = self.cfg.iterations
         losses = []
         psnrs = []
+        ssims = []
         grad_norms = []
         learning_rates = []
         self.one_image_dataset.img = self.one_image_dataset.img.to(self.device)
@@ -299,6 +308,11 @@ class SimpleTrainer:
         base_render = None
         if self.cfg.use_strategy and self.strategy_state is None:
             self.strategy_state = self.cfg.strategy.initialize_state()
+
+        current_loss_type = LossType.UNKNOWN
+        if self.cfg.use_altering_loss:
+            # we start with SDS
+            current_loss_type = LossType.SDS
 
         pbar = tqdm.tqdm(range(begin, end))
         for i in pbar:
@@ -371,8 +385,14 @@ class SimpleTrainer:
                     )
                     * self.cfg.lmbd
                 )
-
-            if self.cfg.use_fused_loss and (
+            if self.cfg.use_altering_loss:
+                if current_loss_type == LossType.MSE:
+                    loss = mse_loss
+                    current_loss_type = LossType.SDS
+                elif current_loss_type == LossType.SDS:
+                    loss = sds
+                    current_loss_type = LossType.MSE
+            elif self.cfg.use_fused_loss and (
                 self.cfg.use_sds_loss or self.cfg.use_sdi_loss
             ):
                 loss = mse_loss + sds
@@ -391,12 +411,18 @@ class SimpleTrainer:
                     self.splats, self.optimizers, self.strategy_state, i, info
                 )
 
-            # todo add schedulers back
+            # this one wants [H, W, C]
             psnr = self.psnr(out_img, self.one_image_dataset.img.permute(1, 2, 0))
+            # this one wants [B, C, H, W]
+            ssim = self.ssim(
+                out_img.permute(2, 0, 1).unsqueeze(0),
+                self.one_image_dataset.img.unsqueeze(0),
+            )
             # stats
             losses.append(loss.item())
             psnrs.append(psnr.item())
             grad_norms.append(self.calculate_grad_norm())
+            ssims.append(ssim.item())
             # learning rate and scheduling is the same for all params
             learning_rates.append(self.optimizers["means"].param_groups[0]["lr"])
 
@@ -405,7 +431,7 @@ class SimpleTrainer:
                 optimizer.zero_grad(set_to_none=True)
 
             pbar.set_description(
-                f"Iteration {i + 1}/{end}, Loss: {loss.item()}, PSNR: {psnr.item()}"
+                f"Iteration {i + 1}/{end}, Loss: {loss.item()}, PSNR: {psnr.item()} SSIM: {ssim.item()}"
             )
 
             if i % self.cfg.show_steps == 0 or i == end - 1:
@@ -470,6 +496,14 @@ class SimpleTrainer:
                 axes[2, 0].grid(True)
                 axes[2, 0].legend()
 
+                # Plot 8: SSIM with original image
+                axes[2, 1].plot(ssims, label="SSIM", color="green")
+                axes[2, 1].set_title("SSIM with original image")
+                axes[2, 1].set_xlabel("Epoch")
+                axes[2, 1].set_ylabel("SSIM")
+                axes[2, 1].grid(True)
+                axes[2, 1].legend()
+
                 # Adjust layout
                 plt.tight_layout()
 
@@ -496,6 +530,7 @@ class SimpleTrainer:
                 torch.save(to_save, f"{self.ckpt_dir}/ckpt_{i}.pt")
                 with open(f"{self.stats_dir}/step{i}.json", "w") as f:
                     json.dump({"psnr": psnr.item()}, f)
+                    json.dump({"ssim": ssim.item()}, f)
 
         print(f"Total(s):\nRasterization: {times[0]:.3f}, Backward: {times[1]:.3f}")
         print(

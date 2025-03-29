@@ -49,3 +49,6 @@ class Config:
     # for pruning
     strategy: DefaultStrategy = field(default_factory=DefaultStrategy)
     validate: bool = False
+    # in altering fashion: one iteration of sds,
+    # then one iteration of mse
+    use_altering_loss: bool = False

@@ -236,7 +236,11 @@ def new_noise_levels_exps(cfg: Config, default_run_args):
                 current_run_args.append(f"--use-downscaled-mse-loss")
                 result_dir += "_downscaled_mse_loss"
             if cfg.use_fused_loss:
+                current_run_args.append("--use-fused-loss")
                 result_dir += "_fused_loss"
+            if cfg.use_altering_loss:
+                current_run_args.append("--use-altering-loss")
+                result_dir += "_altering_loss"
             current_run_args.append(f"--lowres-noise-level {noise_level}")
             current_run_args.append(f"--results-dir {result_dir}")
             current_run_args.append(f"--min-noise-step {min_step}")
@@ -438,6 +442,7 @@ def main(
     cfg.use_fused_loss = True
     cfg.use_downscaled_mse_loss = True
     cfg.use_strategy = False
+    # cfg.use_altering_loss = True
     # cfg.collapsing_noise_scheduler = True
     # cfg.use_lr_scheduler = True
     # cfg.use_sdi_loss = True
