@@ -190,6 +190,8 @@ def classic_splats_with_validation(cfg: Config):
 def classic_splat_exps(cfg: Config):
     result_dir = f"results_2d_classic_{cfg.width}x{cfg.height}_{'upscaled' if 'render' in IMG_PATH else 'original'}"
     result_dir += f"{'_pruning' if cfg.use_strategy else ''}"
+    if cfg.use_ssim_loss:
+        result_dir += "_ssim_loss"
     iterations = 30_000
     classic_run_args = [
         "python3 simple_trainer_2d.py",
@@ -200,6 +202,7 @@ def classic_splat_exps(cfg: Config):
         f"--results-dir {result_dir}",
         f"--use-classic-mse_loss",
         "--use-strategy" if cfg.use_strategy else "",
+        "--use-ssim-loss" if cfg.use_ssim_loss else "",
     ]
     file_content = (
         SBATCH_TEMPLATE + "\n" + f"echo '{result_dir}'\n" + " ".join(classic_run_args)
@@ -437,11 +440,12 @@ def main(
     # modify parameters for testing
     cfg.base_render_as_cond = True
     cfg.use_sds_loss = True
-    cfg.width = 64
-    cfg.height = 64
+    cfg.width = 256
+    cfg.height = 256
     cfg.use_fused_loss = True
     cfg.use_downscaled_mse_loss = True
     cfg.use_strategy = False
+    cfg.use_ssim_loss = True
     # cfg.use_altering_loss = True
     # cfg.collapsing_noise_scheduler = True
     # cfg.use_lr_scheduler = True
@@ -459,7 +463,8 @@ def main(
         # "--use-fused-loss",
     ]
     result_dirs = []
-    result_dirs += new_noise_levels_exps(cfg, default_run_args)
+    result_dirs += classic_splat_exps(cfg)
+    # result_dirs += new_noise_levels_exps(cfg, default_run_args)
     # result_dirs += classic_splats_with_validation(cfg)
     # result_dirs += different_checkpoints_exp(cfg, default_run_args)
     # result_dirs += classic_splat_exps(cfg)

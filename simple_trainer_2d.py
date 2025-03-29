@@ -30,6 +30,7 @@ from config import Config
 import tqdm
 from gsplat.strategy import DefaultStrategy
 from enum import Enum
+from fused_ssim import fused_ssim
 
 
 class LossType(Enum):
@@ -399,7 +400,17 @@ class SimpleTrainer:
             elif self.cfg.use_sds_loss or self.cfg.use_sdi_loss:
                 loss = sds
             else:
-                loss = mse_loss
+                # this is classical 3DGS case
+                ssim_loss = 0.0
+                if self.cfg.use_ssim_loss:
+                    # we need to minimize
+                    # this one wants [B, C, H, W]
+                    ssim_loss = 1.0 - fused_ssim(
+                        out_img.permute(2, 0, 1).unsqueeze(0),
+                        self.one_image_dataset.img.unsqueeze(0),
+                    )
+                loss = mse_loss + ssim_loss
+
             start = time.time()
             loss.backward()
 
