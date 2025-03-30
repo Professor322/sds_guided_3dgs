@@ -188,11 +188,17 @@ def classic_splats_with_validation(cfg: Config):
 
 
 def classic_splat_exps(cfg: Config):
-    result_dir = f"results_2d_classic_{cfg.width}x{cfg.height}_{'upscaled' if 'render' in IMG_PATH else 'original'}"
+    result_dir = f"results_2d_classic_{cfg.width}x{cfg.height}"
     result_dir += f"{'_pruning' if cfg.use_strategy else ''}"
     if cfg.use_ssim_loss:
         result_dir += "_ssim_loss"
-    iterations = 30_000
+    if cfg.debug_training:
+        result_dir += "_debug"
+    iterations = ITERATIONS
+    checkpoint = 2999
+    checkpoint_path = f"results_2d_classic_{cfg.width}x{cfg.height}"
+    checkpoint_path += f"_original/ckpts/ckpt_{checkpoint}.pt"
+
     classic_run_args = [
         "python3 simple_trainer_2d.py",
         f"--img-path {IMG_PATH}",
@@ -203,6 +209,8 @@ def classic_splat_exps(cfg: Config):
         f"--use-classic-mse_loss",
         "--use-strategy" if cfg.use_strategy else "",
         "--use-ssim-loss" if cfg.use_ssim_loss else "",
+        "--debug-training" if cfg.debug_training else "",
+        f"--ckpt-path {checkpoint_path}",
     ]
     file_content = (
         SBATCH_TEMPLATE + "\n" + f"echo '{result_dir}'\n" + " ".join(classic_run_args)
@@ -218,7 +226,7 @@ def classic_splat_exps(cfg: Config):
 
 
 def new_noise_levels_exps(cfg: Config, default_run_args):
-    noise_levels = [0.01, 0.05, 0.1]
+    noise_levels = [0.01]
     checkpoints = [2999]
     result_dirs = []
     min_step = 10
