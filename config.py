@@ -53,3 +53,5 @@ class Config:
     # then one iteration of mse
     use_altering_loss: bool = False
     use_ssim_loss: bool = False
+
+    debug_training: bool = False

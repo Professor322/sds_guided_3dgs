@@ -315,6 +315,13 @@ class SimpleTrainer:
             # we start with SDS
             current_loss_type = LossType.SDS
 
+        if cfg.debug_training:
+            # clone params
+            param_info = {
+                name: {"initial": param.clone(), "diff": 0.0, "updates": 0}
+                for name, param in self.splats.items()
+            }
+
         pbar = tqdm.tqdm(range(begin, end))
         for i in pbar:
             start = time.time()
@@ -457,6 +464,15 @@ class SimpleTrainer:
                 optimizer.step()
                 optimizer.zero_grad(set_to_none=True)
 
+            if self.cfg.debug_training:
+                for name, param in self.splats.items():
+                    count_changed = (
+                        (torch.norm(param - param_info[name]["initial"], dim=-1) > 0.0)
+                        .sum()
+                        .item()
+                    )
+                    param_info[name]["updates"] += count_changed / cfg.num_points
+
             pbar.set_description(
                 f"Iteration {i + 1}/{end}, Loss: {loss.item()}, PSNR: {psnr.item()} SSIM: {ssim.item()}"
             )
@@ -562,6 +578,11 @@ class SimpleTrainer:
         print(
             f"Per step(s):\nRasterization: {times[0]/self.cfg.iterations:.5f}, Backward: {times[1]/self.cfg.iterations:.5f}"
         )
+        if cfg.debug_training:
+            for name, info in param_info.items():
+                print(
+                    f"Parameter {name} with difference update count per iteration: {info['updates']}"
+                )
 
 
 def main(
