@@ -341,14 +341,14 @@ class SimpleTrainer:
                 resolution = (64, 64)
                 # interpolate expects b, c, h, w, while we have h, w, c
                 downscaled_out_img = F.interpolate(
-                    out_img.permute(1, 2, 0).unsqueeze(0),
+                    out_img.permute(2, 0, 1).unsqueeze(0),
                     resolution,
                     mode="bilinear",
                     align_corners=False,
                     antialias=True,
                 )
                 downscaled_base_render = F.interpolate(
-                    base_render.permute(1, 2, 0).unsqueeze(0),
+                    base_render.permute(2, 0, 1).unsqueeze(0),
                     resolution,
                     mode="bilinear",
                     align_corners=False,
@@ -396,9 +396,25 @@ class SimpleTrainer:
             elif self.cfg.use_fused_loss and (
                 self.cfg.use_sds_loss or self.cfg.use_sdi_loss
             ):
-                loss = mse_loss + sds
+                ssim_loss = 0.0
+                if self.cfg.use_ssim_loss:
+                    # we need to minimize
+                    # this one wants [B, C, H, W]
+                    ssim_loss = 1.0 - fused_ssim(
+                        out_img.permute(2, 0, 1).unsqueeze(0),
+                        base_render.permute(2, 0, 1).unsqueeze(0),
+                    )
+                loss = mse_loss + sds + ssim_loss
             elif self.cfg.use_sds_loss or self.cfg.use_sdi_loss:
-                loss = sds
+                ssim_loss = 0.0
+                if self.cfg.use_ssim_loss:
+                    # we need to minimize
+                    # this one wants [B, C, H, W]
+                    ssim_loss = 1.0 - fused_ssim(
+                        out_img.permute(2, 0, 1).unsqueeze(0),
+                        base_render.permute(2, 0, 1).unsqueeze(0),
+                    )
+                loss = sds + ssim_loss
             else:
                 # this is classical 3DGS case
                 ssim_loss = 0.0
@@ -540,8 +556,7 @@ class SimpleTrainer:
                 Image.fromarray(frame).save(f"{self.render_dir}/image_{i}.png")
                 torch.save(to_save, f"{self.ckpt_dir}/ckpt_{i}.pt")
                 with open(f"{self.stats_dir}/step{i}.json", "w") as f:
-                    json.dump({"psnr": psnr.item()}, f)
-                    json.dump({"ssim": ssim.item()}, f)
+                    json.dump({"psnr": psnr.item(), "ssim": ssim.item()}, f)
 
         print(f"Total(s):\nRasterization: {times[0]:.3f}, Backward: {times[1]:.3f}")
         print(

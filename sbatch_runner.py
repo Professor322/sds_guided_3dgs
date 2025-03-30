@@ -244,6 +244,9 @@ def new_noise_levels_exps(cfg: Config, default_run_args):
             if cfg.use_altering_loss:
                 current_run_args.append("--use-altering-loss")
                 result_dir += "_altering_loss"
+            if cfg.use_ssim_loss:
+                current_run_args.append("--use-ssim-loss")
+                result_dir += "_ssim_loss"
             current_run_args.append(f"--lowres-noise-level {noise_level}")
             current_run_args.append(f"--results-dir {result_dir}")
             current_run_args.append(f"--min-noise-step {min_step}")
@@ -440,8 +443,8 @@ def main(
     # modify parameters for testing
     cfg.base_render_as_cond = True
     cfg.use_sds_loss = True
-    cfg.width = 256
-    cfg.height = 256
+    cfg.width = 64
+    cfg.height = 64
     cfg.use_fused_loss = True
     cfg.use_downscaled_mse_loss = True
     cfg.use_strategy = False
@@ -463,8 +466,8 @@ def main(
         # "--use-fused-loss",
     ]
     result_dirs = []
-    result_dirs += classic_splat_exps(cfg)
-    # result_dirs += new_noise_levels_exps(cfg, default_run_args)
+    # result_dirs += classic_splat_exps(cfg)
+    result_dirs += new_noise_levels_exps(cfg, default_run_args)
     # result_dirs += classic_splats_with_validation(cfg)
     # result_dirs += different_checkpoints_exp(cfg, default_run_args)
     # result_dirs += classic_splat_exps(cfg)
