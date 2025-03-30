@@ -495,7 +495,8 @@ def main(
                 filename,
                 "r",
             ) as file:
-                data = file.read()
+                # mitigation, as I messed up json format
+                data = file.read().split("}")[0] + "}"
                 results = json.loads(data)
                 psnrs_to_dirs.append((results["psnr"], result_dir))
 
