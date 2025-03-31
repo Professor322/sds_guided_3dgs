@@ -460,6 +460,11 @@ class SimpleTrainer:
             # learning rate and scheduling is the same for all params
             learning_rates.append(self.optimizers["means"].param_groups[0]["lr"])
 
+            if self.cfg.grad_clipping is not None:
+                torch.nn.utils.clip_grad_norm_(
+                    [param for param in self.splats.values()], self.cfg.grad_clipping
+                )
+
             for optimizer in self.optimizers.values():
                 optimizer.step()
                 optimizer.zero_grad(set_to_none=True)

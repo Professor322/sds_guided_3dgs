@@ -227,56 +227,60 @@ def classic_splat_exps(cfg: Config):
 
 def new_noise_levels_exps(cfg: Config, default_run_args):
     noise_levels = [0.01]
-    checkpoints = [2999]
+    checkpoints = [2999, 6999, 29999]
+    grad_clipping_values = [1.0, 20.0, 50.0]
     result_dirs = []
     min_step = 10
     max_step = 50
     for noise_level in noise_levels:
         for checkpoint in checkpoints:
-            current_run_args = default_run_args.copy()
-            checkpoint_path = f"results_2d_classic_{cfg.width}x{cfg.height}"
-            checkpoint_path += f"_original/ckpts/ckpt_{checkpoint}.pt"
-            current_run_args.append(f"--ckpt-path {checkpoint_path}")
-            result_dir = f"results_2d_low_res_noise_level_{str(noise_level).replace('.', '_')}_{checkpoint}_min{min_step}_max{max_step}"
-            if cfg.use_sdi_loss:
-                result_dir += "_sdi_loss"
-            if cfg.base_render_as_cond:
-                current_run_args.append("--base-render-as-cond")
-                result_dir += "_base_render_as_cond"
-            if cfg.use_downscaled_mse_loss:
-                current_run_args.append(f"--use-downscaled-mse-loss")
-                result_dir += "_downscaled_mse_loss"
-            if cfg.use_fused_loss:
-                current_run_args.append("--use-fused-loss")
-                result_dir += "_fused_loss"
-            if cfg.use_altering_loss:
-                current_run_args.append("--use-altering-loss")
-                result_dir += "_altering_loss"
-            if cfg.use_ssim_loss:
-                current_run_args.append("--use-ssim-loss")
-                result_dir += "_ssim_loss"
-            if cfg.debug_training:
-                current_run_args.append("--debug-training")
-                result_dir += "_debug"
-            current_run_args.append(f"--lowres-noise-level {noise_level}")
-            current_run_args.append(f"--results-dir {result_dir}")
-            current_run_args.append(f"--min-noise-step {min_step}")
-            current_run_args.append(f"--max-noise-step {max_step}")
-            current_run_args.append(f"--width {cfg.width}")
-            current_run_args.append(f"--height {cfg.height}")
-            file_content = (
-                SBATCH_TEMPLATE
-                + "\n"
-                + f"echo '{result_dir}'\n"
-                + " ".join(current_run_args)
-            )
-            result_dirs.append(result_dir)
-            if DEBUG:
-                print(file_content)
-            with open(SBATCH_FILENAME, "w") as file:
-                file.write(file_content)
-            if not DEBUG and not GET_PLOTS and not TOP_PSNRS:
-                os.system(f"sbatch {SBATCH_FILENAME}")
+            for grad_clipping_value in grad_clipping_values:
+                current_run_args = default_run_args.copy()
+                checkpoint_path = f"results_2d_classic_{cfg.width}x{cfg.height}"
+                checkpoint_path += f"_original/ckpts/ckpt_{checkpoint}.pt"
+                current_run_args.append(f"--ckpt-path {checkpoint_path}")
+                result_dir = f"results_2d_low_res_noise_level_{str(noise_level).replace('.', '_')}_{checkpoint}_min{min_step}_max{max_step}"
+                if cfg.use_sdi_loss:
+                    result_dir += "_sdi_loss"
+                if cfg.base_render_as_cond:
+                    current_run_args.append("--base-render-as-cond")
+                    result_dir += "_base_render_as_cond"
+                if cfg.use_downscaled_mse_loss:
+                    current_run_args.append(f"--use-downscaled-mse-loss")
+                    result_dir += "_downscaled_mse_loss"
+                if cfg.use_fused_loss:
+                    current_run_args.append("--use-fused-loss")
+                    result_dir += "_fused_loss"
+                if cfg.use_altering_loss:
+                    current_run_args.append("--use-altering-loss")
+                    result_dir += "_altering_loss"
+                if cfg.use_ssim_loss:
+                    current_run_args.append("--use-ssim-loss")
+                    result_dir += "_ssim_loss"
+                if cfg.debug_training:
+                    current_run_args.append("--debug-training")
+                    result_dir += "_debug"
+                result_dir += f"_grad_clip_{str(grad_clipping_value).replace('.', '_')}"
+                current_run_args.append(f"--grad-clipping {grad_clipping_value}")
+                current_run_args.append(f"--lowres-noise-level {noise_level}")
+                current_run_args.append(f"--results-dir {result_dir}")
+                current_run_args.append(f"--min-noise-step {min_step}")
+                current_run_args.append(f"--max-noise-step {max_step}")
+                current_run_args.append(f"--width {cfg.width}")
+                current_run_args.append(f"--height {cfg.height}")
+                file_content = (
+                    SBATCH_TEMPLATE
+                    + "\n"
+                    + f"echo '{result_dir}'\n"
+                    + " ".join(current_run_args)
+                )
+                result_dirs.append(result_dir)
+                if DEBUG:
+                    print(file_content)
+                with open(SBATCH_FILENAME, "w") as file:
+                    file.write(file_content)
+                if not DEBUG and not GET_PLOTS and not TOP_PSNRS:
+                    os.system(f"sbatch {SBATCH_FILENAME}")
     return result_dirs
 
 
@@ -456,11 +460,10 @@ def main(
     cfg.use_sds_loss = True
     cfg.width = 64
     cfg.height = 64
-    cfg.use_fused_loss = True
-    cfg.use_downscaled_mse_loss = True
+    # cfg.use_fused_loss = True
+    # cfg.use_downscaled_mse_loss = True
     cfg.use_strategy = False
     cfg.use_ssim_loss = True
-    cfg.debug_training = True
     # cfg.use_altering_loss = True
     # cfg.collapsing_noise_scheduler = True
     # cfg.use_lr_scheduler = True

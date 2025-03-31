@@ -55,3 +55,4 @@ class Config:
     use_ssim_loss: bool = False
 
     debug_training: bool = False
+    grad_clipping: float = None
