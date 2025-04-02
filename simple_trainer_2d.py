@@ -453,7 +453,7 @@ class SimpleTrainer:
                 self.one_image_dataset.img.unsqueeze(0),
             )
 
-            if self.cfg.grad_clipping is not None:
+            if self.cfg.grad_clipping > 0.0:
                 torch.nn.utils.clip_grad_norm_(
                     [param for param in self.splats.values()], self.cfg.grad_clipping
                 )
@@ -472,12 +472,23 @@ class SimpleTrainer:
 
             if self.cfg.debug_training:
                 for name, param in self.splats.items():
-                    count_changed = (
-                        (torch.norm(param - param_info[name]["initial"], dim=-1) > 0.0)
-                        .sum()
-                        .item()
-                    )
-                    param_info[name]["updates"] += count_changed / cfg.num_points
+                    if name == "opacities":
+                        # l2 norm manually
+                        count_changed = (
+                            ((param - param_info[name]["initial"]) ** 2 > 0.0)
+                            .sum()
+                            .item()
+                        )
+                    else:
+                        count_changed = (
+                            (
+                                torch.norm(param - param_info[name]["initial"], dim=-1)
+                                > 0.0
+                            )
+                            .sum()
+                            .item()
+                        )
+                    param_info[name]["updates"] += count_changed
 
             pbar.set_description(
                 f"Iteration {i + 1}/{end}, Loss: {loss.item()}, PSNR: {psnr.item()} SSIM: {ssim.item()}"
@@ -587,7 +598,7 @@ class SimpleTrainer:
         if cfg.debug_training:
             for name, info in param_info.items():
                 print(
-                    f"Parameter {name} with difference update count per iteration: {info['updates']}"
+                    f"Parameter {name} had {info['updates'] / self.cfg.iterations} updated per iteration"
                 )
 
 
