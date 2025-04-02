@@ -52,8 +52,12 @@ class SDSLoss3DGS(torch.nn.Module):
 
     def prepare_downscaled_latents(self, images, lowres_noise_level, downscale=False):
         if downscale:
-            images = F.interpolate(images, (64, 64), mode="nearest")
-        upscaled = F.interpolate(images, (256, 256), mode="nearest")
+            images = F.interpolate(
+                images, (64, 64), mode="bilinear", align_corners=False, antialias=True
+            )
+        upscaled = F.interpolate(
+            images, (256, 256), mode="bilinear", align_corners=False, antialias=True
+        )
         upscaled = 2.0 * upscaled - 1.0
         upscaled = self.scheduler.add_noise(
             upscaled,
