@@ -158,9 +158,7 @@ class SimpleTrainer:
         elif self.cfg.model_type == "2dgs":
             self.rasterize_fnc = rasterization_2dgs
 
-    def rasterize_splats(
-        self,
-    ) -> Tuple[Tensor, Tensor, Dict]:
+    def rasterize_splats(self, i) -> Tuple[Tensor, Tensor, Dict]:
         means = self.splats["means"]  # [N, 3]
         # quats = F.normalize(self.splats["quats"], dim=-1)  # [N, 4]
         # rasterization does normalization internally
@@ -182,6 +180,25 @@ class SimpleTrainer:
             height=self.W,
             packed=False,
         )
+        if i % self.cfg.show_steps == 0 or i == self.cfg.iterations - 1:
+            # render new image but with significanly less splats
+            splats_to_render = 50
+            debug_render_colors, _, _ = self.rasterize_fnc(
+                means=means[:splats_to_render],
+                quats=quats[:splats_to_render],
+                scales=scales[:splats_to_render],
+                opacities=opacities[:splats_to_render],
+                colors=colors[:splats_to_render],
+                viewmats=self.viewmat[None],  # [C, 4, 4]
+                Ks=self.K[None],  # [C, 3, 3]
+                width=self.H,
+                height=self.W,
+                packed=False,
+            )
+            frame = (debug_render_colors[0].detach().cpu().numpy() * 255).astype(
+                np.uint8
+            )
+            Image.fromarray(frame).save(f"{self.render_dir}/debug_image_{i}.png")
         return render_colors, render_alphas, info
 
     def create_splats_with_optimizers(self):
@@ -331,7 +348,7 @@ class SimpleTrainer:
         pbar = tqdm.tqdm(range(begin, end))
         for i in pbar:
             start = time.time()
-            renders, _, info = self.rasterize_splats()
+            renders, _, info = self.rasterize_splats(i)
             if self.cfg.use_strategy:
                 self.cfg.strategy.step_pre_backward(
                     self.splats, self.optimizers, self.strategy_state, i, info
@@ -604,7 +621,7 @@ class SimpleTrainer:
         if cfg.debug_training:
             for name, info in param_info.items():
                 print(
-                    f"Parameter {name} had {info['updates'] / self.cfg.iterations} updated per iteration"
+                    f"Parameter {name} had {info['updates'] / self.cfg.iterations} updates per iteration"
                 )
 
 
