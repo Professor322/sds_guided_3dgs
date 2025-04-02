@@ -55,10 +55,16 @@ class OneImageDataset(Dataset):
 
         self.len = dataset_len
         self.img = Image.open(image_path)
-        if resize_width != 0 and resize_height != 0:
-            self.img = self.img.resize((resize_width, resize_height))
         to_tensor = transforms.ToTensor()
         self.img = to_tensor(self.img)
+        if resize_width != 0 and resize_height != 0:
+            self.img = F.interpolate(
+                self.img.unsqueeze(0),
+                (resize_width, resize_height),
+                align_corners=False,
+                antialias=True,
+                mode="bilinear",
+            ).squeeze(0)
         self.patch_size = patch_size
         self.training_img = None
         self.generated_img = None
