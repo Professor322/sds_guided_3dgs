@@ -452,6 +452,12 @@ class SimpleTrainer:
                 out_img.permute(2, 0, 1).unsqueeze(0),
                 self.one_image_dataset.img.unsqueeze(0),
             )
+
+            if self.cfg.grad_clipping is not None:
+                torch.nn.utils.clip_grad_norm_(
+                    [param for param in self.splats.values()], self.cfg.grad_clipping
+                )
+
             # stats
             losses.append(loss.item())
             psnrs.append(psnr.item())
@@ -459,11 +465,6 @@ class SimpleTrainer:
             ssims.append(ssim.item())
             # learning rate and scheduling is the same for all params
             learning_rates.append(self.optimizers["means"].param_groups[0]["lr"])
-
-            if self.cfg.grad_clipping is not None:
-                torch.nn.utils.clip_grad_norm_(
-                    [param for param in self.splats.values()], self.cfg.grad_clipping
-                )
 
             for optimizer in self.optimizers.values():
                 optimizer.step()
