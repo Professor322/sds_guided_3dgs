@@ -110,9 +110,11 @@ def different_checkpoints_exp(cfg: Config, default_run_args):
 
 def classic_splats_with_validation(cfg: Config):
     # validate on the original image downscaled to 256x256
+
     validataion_width = 256
     validation_height = 256
     validation_img_path = "data/360_v2/bicycle/images_8/_DSC8679.JPG"
+    num_points = [10_000, 20_000, 30_000, 40_000]
 
     iterations = 30_000
     params = [
@@ -121,15 +123,15 @@ def classic_splats_with_validation(cfg: Config):
             "resolution": (64, 64),
             "img_path": "data/360_v2/bicycle/images_8/_DSC8679.JPG",
         },
-        # to train original one
-        {
-            "resolution": (256, 256),
-            "img_path": "data/360_v2/bicycle/images_8/_DSC8679.JPG",
-        },
-        # to train on upscaled bicycle 64->256 using SR model
-        {"resolution": (256, 256), "img_path": "render_bicycle_hard_prompt_25.png"},
-        # to train on upscaled bicycle 64->256 using interpolation
-        {"resolution": (256, 256), "img_path": "interpolated_bicycle.png"},
+        # # to train original one
+        # {
+        #     "resolution": (256, 256),
+        #     "img_path": "data/360_v2/bicycle/images_8/_DSC8679.JPG",
+        # },
+        # # to train on upscaled bicycle 64->256 using SR model
+        # {"resolution": (256, 256), "img_path": "render_bicycle_hard_prompt_25.png"},
+        # # to train on upscaled bicycle 64->256 using interpolation
+        # {"resolution": (256, 256), "img_path": "interpolated_bicycle.png"},
     ]
     classic_run_args = [
         "python3 simple_trainer_2d.py",
@@ -139,50 +141,51 @@ def classic_splats_with_validation(cfg: Config):
     result_dirs = []
     # first start a batch of training
     for param in params:
-        # execution
-        current_run_args = classic_run_args.copy()
-        width, height = param["resolution"]
-        img_path = param["img_path"]
-        if "interpolated" in img_path:
-            image_type = "upscale_interpolated"
-        elif "render" in img_path:
-            image_type = "upscale_sr"
-        else:
-            image_type = "original"
-        result_dir = f"results_2d_classic_{width}x{width}_{image_type}"
+        for num_point in num_points:
+            # execution
+            current_run_args = classic_run_args.copy()
+            width, height = param["resolution"]
+            img_path = param["img_path"]
+            if "interpolated" in img_path:
+                image_type = "upscale_interpolated"
+            elif "render" in img_path:
+                image_type = "upscale_sr"
+            else:
+                image_type = "original"
+            result_dir = f"results_2d_classic_{width}x{width}_{image_type}_num_points_{num_point}"
 
-        current_run_args.append(f"--width {width}")
-        current_run_args.append(f"--height {height}")
-        current_run_args.append(f"--img-path {img_path}")
-        current_run_args.append(f"--results-dir {result_dir}")
-        result_dirs.append(result_dir)
+            current_run_args.append(f"--num-points {num_point}")
+            current_run_args.append(f"--width {width}")
+            current_run_args.append(f"--height {height}")
+            current_run_args.append(f"--img-path {img_path}")
+            current_run_args.append(f"--results-dir {result_dir}")
+            result_dirs.append(result_dir)
+            file_content = (
+                SBATCH_TEMPLATE
+                + "\n"
+                + f"echo '{result_dir}'\n"
+                + "srun "
+                + " ".join(current_run_args)
+            )
 
-        # validatation
-        validation_run_args = classic_run_args.copy()
-        checkpoint_path = f"{result_dir}/ckpts/ckpt_{iterations - 1}.pt"
-        validation_run_args.append(f"--ckpt-path {checkpoint_path}")
-        validation_run_args.append(f"--width {validataion_width}")
-        validation_run_args.append(f"--height {validation_height}")
-        validation_run_args.append(f"--img-path {validation_img_path}")
-        validation_run_args.append(f"--results-dir {result_dir}")
-        validation_run_args.append("--validate")
+            # validatation
+            if cfg.validate:
+                validation_run_args = classic_run_args.copy()
+                checkpoint_path = f"{result_dir}/ckpts/ckpt_{iterations - 1}.pt"
+                validation_run_args.append(f"--ckpt-path {checkpoint_path}")
+                validation_run_args.append(f"--width {validataion_width}")
+                validation_run_args.append(f"--height {validation_height}")
+                validation_run_args.append(f"--img-path {validation_img_path}")
+                validation_run_args.append(f"--results-dir {result_dir}")
+                validation_run_args.append("--validate")
+                file_content += "\n" + "srun " + " ".join(validation_run_args)
 
-        file_content = (
-            SBATCH_TEMPLATE
-            + "\n"
-            + f"echo '{result_dir}'\n"
-            + "srun "
-            + " ".join(current_run_args)
-            + "\n"
-            + "srun "
-            + " ".join(validation_run_args)
-        )
-        if DEBUG:
-            print(file_content)
-        with open(SBATCH_FILENAME, "w") as file:
-            file.write(file_content)
-        if not DEBUG and not GET_PLOTS and not TOP_PSNRS:
-            os.system(f"sbatch {SBATCH_FILENAME}")
+            if DEBUG:
+                print(file_content)
+            with open(SBATCH_FILENAME, "w") as file:
+                file.write(file_content)
+            if not DEBUG and not GET_PLOTS and not TOP_PSNRS:
+                os.system(f"sbatch {SBATCH_FILENAME}")
 
     return result_dirs
 
@@ -195,9 +198,10 @@ def classic_splat_exps(cfg: Config):
     if cfg.debug_training:
         result_dir += "_debug"
     iterations = ITERATIONS
-    checkpoint = 2999
-    checkpoint_path = f"results_2d_classic_{cfg.width}x{cfg.height}"
-    checkpoint_path += f"_original/ckpts/ckpt_{checkpoint}.pt"
+    checkpoint_path = None
+    # checkpoint = 2999
+    # checkpoint_path = f"results_2d_classic_{cfg.width}x{cfg.height}"
+    # checkpoint_path += f"_original/ckpts/ckpt_{checkpoint}.pt"
 
     classic_run_args = [
         "python3 simple_trainer_2d.py",
@@ -210,7 +214,7 @@ def classic_splat_exps(cfg: Config):
         "--use-strategy" if cfg.use_strategy else "",
         "--use-ssim-loss" if cfg.use_ssim_loss else "",
         "--debug-training" if cfg.debug_training else "",
-        f"--ckpt-path {checkpoint_path}",
+        f"--ckpt-path {checkpoint_path}" if checkpoint_path is not None else "",
     ]
     file_content = (
         SBATCH_TEMPLATE + "\n" + f"echo '{result_dir}'\n" + " ".join(classic_run_args)
@@ -482,8 +486,8 @@ def main(
     ]
     result_dirs = []
     # result_dirs += classic_splat_exps(cfg)
-    result_dirs += new_noise_levels_exps(cfg, default_run_args)
-    # result_dirs += classic_splats_with_validation(cfg)
+    # result_dirs += new_noise_levels_exps(cfg, default_run_args)
+    result_dirs += classic_splats_with_validation(cfg)
     # result_dirs += different_checkpoints_exp(cfg, default_run_args)
     # result_dirs += classic_splat_exps(cfg)
     # result_dirs += simple_experiments(cfg, default_run_args)
