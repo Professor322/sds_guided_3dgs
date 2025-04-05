@@ -122,7 +122,6 @@ class SDSLoss3DGS(torch.nn.Module):
             )
 
         with torch.no_grad():
-            # predicts noise to get from x_{t} to x_{t-1}
             noise = torch.randn_like(latents, device=self.device)
             latents_noisy = self.scheduler.add_noise(latents, noise, t)
 

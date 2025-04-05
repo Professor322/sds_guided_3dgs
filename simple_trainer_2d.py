@@ -341,7 +341,7 @@ class SimpleTrainer:
         if cfg.debug_training:
             # clone params
             param_info = {
-                name: {"initial": param.clone(), "diff": 0.0, "updates": 0}
+                name: {"previous": param.detach().clone(), "diff": 0.0, "updates": 0}
                 for name, param in self.splats.items()
             }
 
@@ -498,20 +498,21 @@ class SimpleTrainer:
                     if name == "opacities":
                         # l2 norm manually
                         count_changed = (
-                            ((param - param_info[name]["initial"]) ** 2 > 0.0)
+                            ((param - param_info[name]["previous"]) ** 2 > 0.0)
                             .sum()
                             .item()
                         )
                     else:
                         count_changed = (
                             (
-                                torch.norm(param - param_info[name]["initial"], dim=-1)
+                                torch.norm(param - param_info[name]["previous"], dim=-1)
                                 > 0.0
                             )
                             .sum()
                             .item()
                         )
                     param_info[name]["updates"] += count_changed
+                    param_info[name]["previous"] = param.detach().clone()
 
             pbar.set_description(
                 f"Iteration {i + 1}/{end}, Loss: {loss.item()}, PSNR: {psnr.item()} SSIM: {ssim.item()}"
@@ -621,7 +622,7 @@ class SimpleTrainer:
         if cfg.debug_training:
             for name, info in param_info.items():
                 print(
-                    f"Parameter {name} had {info['updates'] / self.cfg.iterations} updates per iteration"
+                    f"Parameter {name} had {info['updates'] / self.cfg.iterations} updates per iteration on average"
                 )
 
 
