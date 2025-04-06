@@ -179,7 +179,7 @@ def sds_experiments_2d(cfg: Config, default_run_args):
                             if prompt != "":
                                 current_run_args.append(f'--prompt "{prompt}"')
                                 result_dir += f"_{'easy' if prompt == easy_prompt else 'hard'}_prompt"
-                            if guidance_scale != 0:
+                            if guidance_scale > 0.0:
                                 current_run_args.append(
                                     f"--guidance-scale {guidance_scale}"
                                 )

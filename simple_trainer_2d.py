@@ -180,25 +180,6 @@ class SimpleTrainer:
             height=self.W,
             packed=False,
         )
-        if i % self.cfg.show_steps == 0 or i == self.cfg.iterations - 1:
-            # render new image but with significanly less splats
-            splats_to_render = 50
-            debug_render_colors, _, _ = self.rasterize_fnc(
-                means=means[:splats_to_render],
-                quats=quats[:splats_to_render],
-                scales=scales[:splats_to_render],
-                opacities=opacities[:splats_to_render],
-                colors=colors[:splats_to_render],
-                viewmats=self.viewmat[None],  # [C, 4, 4]
-                Ks=self.K[None],  # [C, 3, 3]
-                width=self.H,
-                height=self.W,
-                packed=False,
-            )
-            frame = (debug_render_colors[0].detach().cpu().numpy() * 255).astype(
-                np.uint8
-            )
-            Image.fromarray(frame).save(f"{self.render_dir}/debug_image_{i}.png")
         return render_colors, render_alphas, info
 
     def create_splats_with_optimizers(self):
@@ -328,6 +309,8 @@ class SimpleTrainer:
         grad_norms = []
         learning_rates = []
         self.one_image_dataset.img = self.one_image_dataset.img.to(self.device)
+        prev_render = None
+        diff = None
 
         base_render = None
         if self.cfg.use_strategy and self.strategy_state is None:
@@ -354,6 +337,10 @@ class SimpleTrainer:
                     self.splats, self.optimizers, self.strategy_state, i, info
                 )
             out_img = renders[0]
+            # how much pixels have changed compared to previous iteration
+            if prev_render is not None:
+                diff = (prev_render - out_img).clamp(0.0, 1.0)
+
             if base_render is None:
                 base_render = out_img.detach().clone()
                 base_render.requires_grad = True
@@ -517,7 +504,7 @@ class SimpleTrainer:
             pbar.set_description(
                 f"Iteration {i + 1}/{end}, Loss: {loss.item()}, PSNR: {psnr.item()} SSIM: {ssim.item()}"
             )
-
+            prev_render = out_img.detach().clone()
             if i % self.cfg.show_steps == 0 or i == end - 1:
                 if self.cfg.show_plots:
                     clear_output(wait=True)
@@ -588,6 +575,14 @@ class SimpleTrainer:
                 axes[2, 1].grid(True)
                 axes[2, 1].legend()
 
+                # Plot 9: Pixel difference between last 2 iterations
+                if diff is not None:
+                    diff_render_rgb = (diff.detach().cpu().numpy() * 255).astype(
+                        np.uint8
+                    )
+                    axes[2, 2].imshow(diff_render_rgb)
+                    axes[2, 2].set_title("Pixel difference between last 2 iterations")
+                    axes[2, 2].axis("off")
                 # Adjust layout
                 plt.tight_layout()
 
@@ -603,6 +598,11 @@ class SimpleTrainer:
                 if self.cfg.save_imgs:
                     frame = (out_img.detach().cpu().numpy() * 255).astype(np.uint8)
                     Image.fromarray(frame).save(f"{self.render_dir}/image_{i}.png")
+                    if diff is not None:
+                        Image.fromarray(diff_render_rgb).save(
+                            f"{self.render_dir}/diff_image_{i}.png"
+                        )
+
             if i in [idx - 1 for idx in self.cfg.save_steps] or i == end - 1:
                 print(f"Saving checkpoint at: {i}")
                 to_save = {
