@@ -505,7 +505,7 @@ class SimpleTrainer:
                 f"Iteration {i + 1}/{end}, Loss: {loss.item()}, PSNR: {psnr.item()} SSIM: {ssim.item()}"
             )
             prev_render = out_img.detach().clone()
-            if i % self.cfg.show_steps == 0 or i == end - 1:
+            if i % self.cfg.show_steps == 0 or i == end - 1 or i == begin + 1:
                 if self.cfg.show_plots:
                     clear_output(wait=True)
                 base_render_rgb = (base_render.detach().cpu().numpy() * 255).astype(
