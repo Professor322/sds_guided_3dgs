@@ -1,4 +1,6 @@
 # This repo related
+2d_training_generated.sbatch
+dev.ipynb
 ckpt*
 if_stage*
 data
