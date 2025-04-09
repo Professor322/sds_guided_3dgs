@@ -115,11 +115,13 @@ def classic_splats_with_validation_2d(cfg: Config):
 
 
 def sds_experiments_2d(cfg: Config, default_run_args):
-    noise_levels = [0.01]
-    checkpoints = [2999, 6999, 29999]
+    noise_levels = [0.0]
+    # checkpoints = [2999, 6999, 29999]
+    checkpoints = [29999]
     # grad_clipping_values = [1.0, 20.0, 50.0, 200.0]
     grad_clipping_values = [0.0]
-    num_points = [10_000, 20_000, 30_000, 40_000]
+    num_points = [10_000]
+    # num_points = [10_000, 20_000]
     easy_prompt = "bicycle near the bench"
     hard_prompt = (
         "A surreal outdoor scene featuring a "
@@ -133,11 +135,11 @@ def sds_experiments_2d(cfg: Config, default_run_args):
         "and dense foliage in the background. The atmosphere is calm "
         "and natural, with soft, diffused lighting enhancing the realism of the scene."
     )
-    prompts = [easy_prompt, hard_prompt]
-    guidance_scales = [5.0, 10.0, 25.0, 50.0, 100.0]
+    prompts = [easy_prompt]
+    guidance_scales = [10.0]
     result_dirs = []
-    min_step = 10
-    max_step = 50
+    min_step = 20
+    max_step = 980
     for noise_level in noise_levels:
         for checkpoint in checkpoints:
             for grad_clipping_value in grad_clipping_values:
@@ -176,6 +178,9 @@ def sds_experiments_2d(cfg: Config, default_run_args):
                                 current_run_args.append(
                                     f"--grad-clipping {grad_clipping_value}"
                                 )
+                            if cfg.use_gaussian_sr:
+                                result_dir += f"_gaussian_sr"
+                                current_run_args.append(f"--use-gaussian-sr")
                             if prompt != "":
                                 current_run_args.append(f'--prompt "{prompt}"')
                                 result_dir += f"_{'easy' if prompt == easy_prompt else 'hard'}_prompt"
@@ -195,6 +200,12 @@ def sds_experiments_2d(cfg: Config, default_run_args):
                             current_run_args.append(f"--max-noise-step {max_step}")
                             current_run_args.append(f"--width {cfg.width}")
                             current_run_args.append(f"--height {cfg.height}")
+                            current_run_args.append(
+                                f"--render-width {cfg.render_width}"
+                            )
+                            current_run_args.append(
+                                f"--render-height {cfg.render_height}"
+                            )
                             file_content = (
                                 SBATCH_TEMPLATE
                                 + "\n"
@@ -215,10 +226,12 @@ def main(
     cfg: Config,
 ) -> None:
     # modify parameters for testing
-    cfg.base_render_as_cond = True
+    cfg.base_render_as_cond = False
     cfg.use_sds_loss = True
     cfg.width = 64
     cfg.height = 64
+    cfg.render_height = 256
+    cfg.render_width = 256
     # cfg.use_fused_loss = True
     # cfg.use_downscaled_mse_loss = True
     cfg.use_strategy = False

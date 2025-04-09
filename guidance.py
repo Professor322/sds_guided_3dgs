@@ -2,9 +2,40 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
-from diffusers import DiffusionPipeline, StableDiffusionPipeline, DDIMScheduler
+from diffusers import DiffusionPipeline, StableDiffusionPipeline
 
-from transformers import T5EncoderModel
+# from omegaconf import OmegaConf
+
+# TODO finish implementing StableSR
+class StableSRSDS(torch.nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.device = "cuda"
+        config = OmegaConf.load("configs/stableSRNew/v2-finetune_text_T_512.yaml")
+        self.model = load_model_from_config(config, "stablesr_000117.ckpt")
+        device = torch.device("cuda")
+
+        self.model.configs = config
+        self.model = self.model.to(device)
+        self.model.register_schedule(
+            given_betas=None,
+            beta_schedule="linear",
+            timesteps=1000,
+            linear_start=0.00085,
+            linear_end=0.0120,
+            cosine_s=8e-3,
+        )
+
+        self.model.num_timesteps = 1000
+
+        vqgan_config = OmegaConf.load(
+            "configs/autoencoder/autoencoder_kl_64x64x4_resi.yaml"
+        )
+        self.vq_model = load_model_from_config(vqgan_config, "vqgan_cfw_00011.ckpt")
+        self.vq_model = self.vq_model.to(device)
+
+    def forward(self, x):
+        pass
 
 
 class SDSLoss3DGS(torch.nn.Module):

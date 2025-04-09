@@ -45,10 +45,13 @@ class OneImageDataset(Dataset):
         image_path,
         patch_size=64,
         dataset_len=1000,
-        resize_width=256,
-        resize_height=256,
+        training_width=256,
+        training_height=256,
+        validation_width=256,
+        validation_height=256,
         train=True,
         use_generated_img=False,
+        device="cuda",
     ):
         super().__init__()
         self.train = train
@@ -56,15 +59,26 @@ class OneImageDataset(Dataset):
         self.len = dataset_len
         self.img = Image.open(image_path)
         to_tensor = transforms.ToTensor()
-        self.img = to_tensor(self.img)
-        if resize_width != 0 and resize_height != 0:
-            self.img = F.interpolate(
-                self.img.unsqueeze(0),
-                (resize_width, resize_height),
+        img = to_tensor(self.img)
+
+        self.img = F.interpolate(
+            img.unsqueeze(0),
+            (training_width, training_height),
+            align_corners=False,
+            antialias=True,
+            mode="bilinear",
+        ).squeeze(0)
+        self.validation_img = (
+            F.interpolate(
+                img.unsqueeze(0),
+                (validation_width, validation_height),
                 align_corners=False,
                 antialias=True,
                 mode="bilinear",
-            ).squeeze(0)
+            )
+            .squeeze(0)
+            .to(device)
+        )
         self.patch_size = patch_size
         self.training_img = None
         self.generated_img = None
@@ -102,7 +116,11 @@ class SimpleTrainer:
         self.device = torch.device("cuda:0")
         print(f"Loading dataset...")
         self.one_image_dataset = OneImageDataset(
-            image_path=cfg.img_path, resize_height=cfg.height, resize_width=cfg.width
+            image_path=cfg.img_path,
+            training_height=cfg.height,
+            training_width=cfg.width,
+            validation_height=cfg.render_height,
+            validation_width=cfg.render_width,
         )
         self.num_points = self.cfg.num_points
         print(f"Creating directories...")
@@ -117,10 +135,7 @@ class SimpleTrainer:
         self.ssim = StructuralSimilarityIndexMeasure(data_range=1.0).to(self.device)
 
         fov_x = math.pi / 2.0
-        self.H, self.W = self.one_image_dataset.img.size(
-            1
-        ), self.one_image_dataset.img.size(2)
-        self.focal = 0.5 * float(self.W) / math.tan(0.5 * fov_x)
+        self.focal = 0.5 * float(self.cfg.render_width) / math.tan(0.5 * fov_x)
 
         if self.cfg.ckpt_path:
             self.splats, self.optimizers = self.load_splats_with_optimizers()
@@ -176,8 +191,8 @@ class SimpleTrainer:
             colors=colors,
             viewmats=self.viewmat[None],  # [C, 4, 4]
             Ks=self.K[None],  # [C, 3, 3]
-            width=self.H,
-            height=self.W,
+            width=self.cfg.render_width,
+            height=self.cfg.render_height,
             packed=False,
         )
         return render_colors, render_alphas, info
@@ -231,8 +246,8 @@ class SimpleTrainer:
         )
         self.K = torch.tensor(
             [
-                [self.focal, 0, self.W / 2],
-                [0, self.focal, self.H / 2],
+                [self.focal, 0, self.cfg.render_width / 2],
+                [0, self.focal, self.cfg.render_height / 2],
                 [0, 0, 1],
             ],
             device=self.device,
@@ -350,7 +365,7 @@ class SimpleTrainer:
             if self.cfg.use_classic_mse_loss:
                 # calculate loss
                 mse_loss = self.mse_loss(
-                    out_img, self.one_image_dataset.img.permute(1, 2, 0)
+                    out_img.permute(2, 0, 1), self.one_image_dataset.img
                 )
             elif self.cfg.use_downscaled_mse_loss:
                 # downscale the base image and rendering
@@ -403,7 +418,28 @@ class SimpleTrainer:
                     )
                     * self.cfg.lmbd
                 )
-            if self.cfg.use_altering_loss:
+            if cfg.use_gaussian_sr:
+                # do not use base renders anymore
+                # render image in HR 256x256
+                # apply noise to it and condition on LR (64x64)
+                # original image (probably do not apply any noise to condition)
+                # calculate SDS
+                # downscale rendering into 256x256->64x64 and calculate MSE
+                # final loss MSE + lmbd * SDS (how to do it properly?)
+                resolution = (64, 64)
+                downscaled_render = F.interpolate(
+                    out_img.permute(2, 0, 1).unsqueeze(0),
+                    resolution,
+                    mode="bilinear",
+                    align_corners=False,
+                    antialias=True,
+                )
+                mse_loss = self.mse_loss(
+                    downscaled_render, self.dataloader.dataset.training_img.unsqueeze(0)
+                )
+                loss = mse_loss + sds
+
+            elif self.cfg.use_altering_loss:
                 if current_loss_type == LossType.MSE:
                     loss = mse_loss
                     current_loss_type = LossType.SDS
@@ -456,11 +492,13 @@ class SimpleTrainer:
                 )
 
             # this one wants [H, W, C]
-            psnr = self.psnr(out_img, self.one_image_dataset.img.permute(1, 2, 0))
+            psnr = self.psnr(
+                out_img, self.one_image_dataset.validation_img.permute(1, 2, 0)
+            )
             # this one wants [B, C, H, W]
             ssim = self.ssim(
                 out_img.permute(2, 0, 1).unsqueeze(0),
-                self.one_image_dataset.img.unsqueeze(0),
+                self.one_image_dataset.validation_img.unsqueeze(0),
             )
 
             if self.cfg.grad_clipping > 0.0:
@@ -513,7 +551,10 @@ class SimpleTrainer:
                 )
                 pred = (out_img.detach().cpu().numpy() * 255).astype(np.uint8)
                 orig = (
-                    self.one_image_dataset.img.permute(1, 2, 0).detach().cpu().numpy()
+                    self.one_image_dataset.validation_img.permute(1, 2, 0)
+                    .detach()
+                    .cpu()
+                    .numpy()
                     * 255
                 ).astype(np.uint8)
 

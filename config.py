@@ -5,6 +5,9 @@ from gsplat.strategy import DefaultStrategy
 
 @dataclass
 class Config:
+    render_width: int = 256
+    render_height: int = 256
+    # this is training width and height
     width: int = 256
     height: int = 256
     num_points: int = 100_000
@@ -56,3 +59,5 @@ class Config:
 
     debug_training: bool = False
     grad_clipping: float = 0.0
+    # implementing method from the paper
+    use_gaussian_sr: bool = False
