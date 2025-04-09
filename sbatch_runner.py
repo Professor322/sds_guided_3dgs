@@ -232,6 +232,7 @@ def main(
     cfg.height = 64
     cfg.render_height = 256
     cfg.render_width = 256
+    cfg.use_gaussian_sr = True
     # cfg.use_fused_loss = True
     # cfg.use_downscaled_mse_loss = True
     cfg.use_strategy = False
