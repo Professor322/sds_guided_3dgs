@@ -205,6 +205,9 @@ def sds_experiments_2d(cfg: Config, default_run_args):
                                         f"--guidance-scale {guidance_scale}"
                                     )
                                     result_dir += f"_guidance_scale_{str(guidance_scale).replace('.', '_')}"
+                                if cfg.use_strategy:
+                                    result_dir += "_pruning"
+                                    current_run_args.append(f"--use-strategy")
 
                                 result_dir += f"_num_points_{num_point}"
                                 current_run_args.append(f"--num-points {num_point}")
@@ -251,7 +254,7 @@ def main(
     cfg.use_gaussian_sr = True
     # cfg.use_fused_loss = True
     # cfg.use_downscaled_mse_loss = True
-    cfg.use_strategy = False
+    cfg.use_strategy = True
     cfg.noise_step_anealing = 100
     # cfg.use_ssim_loss = True
     # cfg.use_altering_loss = True
