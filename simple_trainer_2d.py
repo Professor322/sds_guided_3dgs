@@ -435,7 +435,7 @@ class SimpleTrainer:
                     antialias=True,
                 )
                 mse_loss = self.mse_loss(
-                    downscaled_render, self.dataloader.dataset.training_img.unsqueeze(0)
+                    downscaled_render, self.dataloader.dataset.img.unsqueeze(0)
                 )
                 loss = mse_loss + sds
 
