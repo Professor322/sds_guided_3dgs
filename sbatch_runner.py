@@ -9,7 +9,7 @@ IMG_PATH = "data/360_v2/bicycle/images_8/_DSC8679.JPG"
 ITERATIONS = 1_000
 # sometimes can hit oom, so we have to reduce it
 BATCH_SIZE = 1
-DEBUG = False
+DEBUG = True
 GET_PLOTS = False
 TOP_PSNRS = False
 
@@ -140,85 +140,96 @@ def sds_experiments_2d(cfg: Config, default_run_args):
     result_dirs = []
     min_step = 20
     max_step = 980
-    for noise_level in noise_levels:
-        for checkpoint in checkpoints:
-            for grad_clipping_value in grad_clipping_values:
-                for num_point in num_points:
-                    for prompt in prompts:
-                        for guidance_scale in guidance_scales:
-                            current_run_args = default_run_args.copy()
-                            checkpoint_path = (
-                                f"results_2d_classic_{cfg.width}x{cfg.height}"
-                            )
-                            checkpoint_path += f"_original_num_points_{num_point}/ckpts/ckpt_{checkpoint}.pt"
-                            current_run_args.append(f"--ckpt-path {checkpoint_path}")
-                            result_dir = f"results_2d_low_res_noise_level_{str(noise_level).replace('.', '_')}_{checkpoint}_min{min_step}_max{max_step}"
-                            if cfg.use_sdi_loss:
-                                result_dir += "_sdi_loss"
-                            if cfg.base_render_as_cond:
-                                current_run_args.append("--base-render-as-cond")
-                                result_dir += "_base_render_as_cond"
-                            if cfg.use_downscaled_mse_loss:
-                                current_run_args.append(f"--use-downscaled-mse-loss")
-                                result_dir += "_downscaled_mse_loss"
-                            if cfg.use_fused_loss:
-                                current_run_args.append("--use-fused-loss")
-                                result_dir += "_fused_loss"
-                            if cfg.use_altering_loss:
-                                current_run_args.append("--use-altering-loss")
-                                result_dir += "_altering_loss"
-                            if cfg.use_ssim_loss:
-                                current_run_args.append("--use-ssim-loss")
-                                result_dir += "_ssim_loss"
-                            if cfg.debug_training:
-                                current_run_args.append("--debug-training")
-                                result_dir += "_debug"
-                            if grad_clipping_value > 0.0:
-                                result_dir += f"_grad_clip_{str(grad_clipping_value).replace('.', '_')}"
-                                current_run_args.append(
-                                    f"--grad-clipping {grad_clipping_value}"
+    lmbds = [0.001, 0.01, 0.1]
+    for lmbd in lmbds:
+        for noise_level in noise_levels:
+            for checkpoint in checkpoints:
+                for grad_clipping_value in grad_clipping_values:
+                    for num_point in num_points:
+                        for prompt in prompts:
+                            for guidance_scale in guidance_scales:
+                                current_run_args = default_run_args.copy()
+                                checkpoint_path = (
+                                    f"results_2d_classic_{cfg.width}x{cfg.height}"
                                 )
-                            if cfg.use_gaussian_sr:
-                                result_dir += f"_gaussian_sr"
-                                current_run_args.append(f"--use-gaussian-sr")
-                            if prompt != "":
-                                current_run_args.append(f'--prompt "{prompt}"')
-                                result_dir += f"_{'easy' if prompt == easy_prompt else 'hard'}_prompt"
-                            if guidance_scale > 0.0:
+                                checkpoint_path += f"_original_num_points_{num_point}/ckpts/ckpt_{checkpoint}.pt"
                                 current_run_args.append(
-                                    f"--guidance-scale {guidance_scale}"
+                                    f"--ckpt-path {checkpoint_path}"
                                 )
-                                result_dir += f"_guidance_scale_{str(guidance_scale).replace('.', '_')}"
+                                result_dir = f"results_2d_low_res_noise_level_{str(noise_level).replace('.', '_')}_{checkpoint}_min{min_step}_max{max_step}"
+                                if cfg.use_sdi_loss:
+                                    result_dir += "_sdi_loss"
+                                if cfg.base_render_as_cond:
+                                    current_run_args.append("--base-render-as-cond")
+                                    result_dir += "_base_render_as_cond"
+                                if cfg.use_downscaled_mse_loss:
+                                    current_run_args.append(
+                                        f"--use-downscaled-mse-loss"
+                                    )
+                                    result_dir += "_downscaled_mse_loss"
+                                if cfg.use_fused_loss:
+                                    current_run_args.append("--use-fused-loss")
+                                    result_dir += "_fused_loss"
+                                if cfg.use_altering_loss:
+                                    current_run_args.append("--use-altering-loss")
+                                    result_dir += "_altering_loss"
+                                if cfg.use_ssim_loss:
+                                    current_run_args.append("--use-ssim-loss")
+                                    result_dir += "_ssim_loss"
+                                if cfg.debug_training:
+                                    current_run_args.append("--debug-training")
+                                    result_dir += "_debug"
+                                if grad_clipping_value > 0.0:
+                                    result_dir += f"_grad_clip_{str(grad_clipping_value).replace('.', '_')}"
+                                    current_run_args.append(
+                                        f"--grad-clipping {grad_clipping_value}"
+                                    )
+                                if lmbd > 0.0:
+                                    result_dir += (
+                                        f"_sds_lmbd_{str(lmbd).replace('.', '_')}"
+                                    )
+                                    current_run_args.append(f"--lmbd {lmbd}")
+                                if cfg.use_gaussian_sr:
+                                    result_dir += f"_gaussian_sr"
+                                    current_run_args.append(f"--use-gaussian-sr")
+                                if prompt != "":
+                                    current_run_args.append(f'--prompt "{prompt}"')
+                                    result_dir += f"_{'easy' if prompt == easy_prompt else 'hard'}_prompt"
+                                if guidance_scale > 0.0:
+                                    current_run_args.append(
+                                        f"--guidance-scale {guidance_scale}"
+                                    )
+                                    result_dir += f"_guidance_scale_{str(guidance_scale).replace('.', '_')}"
 
-                            result_dir += f"_num_points_{num_point}"
-                            current_run_args.append(f"--num-points {num_point}")
-                            current_run_args.append(
-                                f"--lowres-noise-level {noise_level}"
-                            )
-                            current_run_args.append(f"--results-dir {result_dir}")
-                            current_run_args.append(f"--min-noise-step {min_step}")
-                            current_run_args.append(f"--max-noise-step {max_step}")
-                            current_run_args.append(f"--width {cfg.width}")
-                            current_run_args.append(f"--height {cfg.height}")
-                            current_run_args.append(
-                                f"--render-width {cfg.render_width}"
-                            )
-                            current_run_args.append(
-                                f"--render-height {cfg.render_height}"
-                            )
-                            file_content = (
-                                SBATCH_TEMPLATE
-                                + "\n"
-                                + f"echo '{result_dir}'\n"
-                                + " ".join(current_run_args)
-                            )
-                            result_dirs.append(result_dir)
-                            if DEBUG:
-                                print(file_content)
-                            with open(SBATCH_FILENAME, "w") as file:
-                                file.write(file_content)
-                            if not DEBUG and not GET_PLOTS and not TOP_PSNRS:
-                                os.system(f"sbatch {SBATCH_FILENAME}")
+                                result_dir += f"_num_points_{num_point}"
+                                current_run_args.append(f"--num-points {num_point}")
+                                current_run_args.append(
+                                    f"--lowres-noise-level {noise_level}"
+                                )
+                                current_run_args.append(f"--results-dir {result_dir}")
+                                current_run_args.append(f"--min-noise-step {min_step}")
+                                current_run_args.append(f"--max-noise-step {max_step}")
+                                current_run_args.append(f"--width {cfg.width}")
+                                current_run_args.append(f"--height {cfg.height}")
+                                current_run_args.append(
+                                    f"--render-width {cfg.render_width}"
+                                )
+                                current_run_args.append(
+                                    f"--render-height {cfg.render_height}"
+                                )
+                                file_content = (
+                                    SBATCH_TEMPLATE
+                                    + "\n"
+                                    + f"echo '{result_dir}'\n"
+                                    + " ".join(current_run_args)
+                                )
+                                result_dirs.append(result_dir)
+                                if DEBUG:
+                                    print(file_content)
+                                with open(SBATCH_FILENAME, "w") as file:
+                                    file.write(file_content)
+                                if not DEBUG and not GET_PLOTS and not TOP_PSNRS:
+                                    os.system(f"sbatch {SBATCH_FILENAME}")
     return result_dirs
 
 
