@@ -9,7 +9,7 @@ IMG_PATH = "data/360_v2/bicycle/images_8/_DSC8679.JPG"
 ITERATIONS = 1_000
 # sometimes can hit oom, so we have to reduce it
 BATCH_SIZE = 1
-DEBUG = True
+DEBUG = False
 GET_PLOTS = False
 TOP_PSNRS = False
 
