@@ -400,6 +400,14 @@ class SimpleTrainer:
                 if self.cfg.collapsing_noise_scheduler:
                     min_step = self.compute_step(200, 300, i / self.cfg.iterations)
                     max_step = self.compute_step(500, 980, i / self.cfg.iterations)
+                elif self.cfg.noise_step_anealing > 0:
+                    min_step = int(
+                        min(
+                            self.cfg.min_noise_step,
+                            self.cfg.max_noise_step - i / self.cfg.noise_step_anealing,
+                        )
+                    )
+                    max_step = self.cfg.max_noise_step
                 else:
                     min_step = self.cfg.min_noise_step
                     max_step = self.cfg.max_noise_step

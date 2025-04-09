@@ -9,7 +9,7 @@ IMG_PATH = "data/360_v2/bicycle/images_8/_DSC8679.JPG"
 ITERATIONS = 1_000
 # sometimes can hit oom, so we have to reduce it
 BATCH_SIZE = 1
-DEBUG = False
+DEBUG = True
 GET_PLOTS = False
 TOP_PSNRS = False
 
@@ -189,6 +189,11 @@ def sds_experiments_2d(cfg: Config, default_run_args):
                                         f"_sds_lmbd_{str(lmbd).replace('.', '_')}"
                                     )
                                     current_run_args.append(f"--lmbd {lmbd}")
+                                if cfg.noise_step_anealing > 0:
+                                    result_dir += f"_anealing_{cfg.noise_step_anealing}"
+                                    current_run_args.append(
+                                        f"--noise-step-anealing {cfg.noise_step_anealing}"
+                                    )
                                 if cfg.use_gaussian_sr:
                                     result_dir += f"_gaussian_sr"
                                     current_run_args.append(f"--use-gaussian-sr")
@@ -247,6 +252,7 @@ def main(
     # cfg.use_fused_loss = True
     # cfg.use_downscaled_mse_loss = True
     cfg.use_strategy = False
+    cfg.noise_step_anealing = 100
     # cfg.use_ssim_loss = True
     # cfg.use_altering_loss = True
     # cfg.collapsing_noise_scheduler = True

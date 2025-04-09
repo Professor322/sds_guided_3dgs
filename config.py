@@ -61,3 +61,4 @@ class Config:
     grad_clipping: float = 0.0
     # implementing method from the paper
     use_gaussian_sr: bool = False
+    noise_step_anealing: bool = False
