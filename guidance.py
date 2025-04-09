@@ -75,11 +75,11 @@ class SDSLoss3DGS(torch.nn.Module):
         ).sample.to(input_dtype)
 
     def prepare_latents(self, images):
-        resolution = (256, 256)
-        latents = F.interpolate(
-            images, resolution, mode="bilinear", align_corners=False, antialias=True
-        )
-        return 2.0 * latents - 1.0
+        # resolution = (256, 256)
+        # latents = F.interpolate(
+        #     images, resolution, mode="bilinear", align_corners=False, antialias=True
+        # )
+        return 2.0 * images - 1.0
 
     def prepare_downscaled_latents(self, images, lowres_noise_level, downscale=False):
         if downscale:

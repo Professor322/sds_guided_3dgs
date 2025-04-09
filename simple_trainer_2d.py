@@ -109,7 +109,6 @@ class SimpleTrainer:
         if self.cfg.use_strategy:
             self.cfg.strategy = DefaultStrategy(
                 verbose=True,
-                refine_every=200,
             )
         else:
             self.cfg.strategy = NotImplementedError
