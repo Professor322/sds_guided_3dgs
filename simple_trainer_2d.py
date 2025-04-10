@@ -151,9 +151,9 @@ class SimpleTrainer:
                 if self.cfg.use_sds_loss
                 else SDILoss3DGS(prompt=self.cfg.prompt)
             )
-            self.dataloader = DataLoader(
-                self.one_image_dataset, batch_size=cfg.batch_size, num_workers=0
-            )
+        self.dataloader = DataLoader(
+            self.one_image_dataset, batch_size=cfg.batch_size, num_workers=0
+        )
         self.mse_loss = torch.nn.MSELoss()
         if self.cfg.use_noise_scheduler:
             self.noise_scheduler = self.set_linear_time_strategy(
