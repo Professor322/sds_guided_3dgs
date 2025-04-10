@@ -158,8 +158,10 @@ def sds_experiments_2d(cfg: Config, default_run_args):
                                 )
                                 result_dir = f"results_2d_low_res_noise_level_{str(noise_level).replace('.', '_')}_{checkpoint}_min{min_step}_max{max_step}"
                                 if cfg.use_sdi_loss:
+                                    current_run_args.append("--use-sdi-loss")
                                     result_dir += "_sdi_loss"
                                 if cfg.use_sds_loss:
+                                    current_run_args.append("--use-sds-loss")
                                     result_dir += "_sds_loss"
                                 if cfg.base_render_as_cond:
                                     current_run_args.append("--base-render-as-cond")
@@ -187,9 +189,7 @@ def sds_experiments_2d(cfg: Config, default_run_args):
                                         f"--grad-clipping {grad_clipping_value}"
                                     )
                                 if lmbd > 0.0:
-                                    result_dir += (
-                                        f"_sds_lmbd_{str(lmbd).replace('.', '_')}"
-                                    )
+                                    result_dir += f"_lmbd_{str(lmbd).replace('.', '_')}"
                                     current_run_args.append(f"--lmbd {lmbd}")
                                 if cfg.noise_step_anealing > 0:
                                     result_dir += f"_anealing_{cfg.noise_step_anealing}"
@@ -272,7 +272,6 @@ def main(
         f"--iterations {ITERATIONS}",
         f"--num-points {cfg.num_points}",
         f"--batch-size {BATCH_SIZE}",
-        "--use-sds-loss" if cfg.use_sds_loss else "--use-sdi-loss",
     ]
     result_dirs = []
     if do_sds_experiments:
