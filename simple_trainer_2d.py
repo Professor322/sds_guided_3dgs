@@ -85,17 +85,17 @@ class OneImageDataset(Dataset):
         self.use_generated_img = use_generated_img
 
     def __getitem__(self, idx):
-        if self.train:
-            # C, H, W -> H, W, C
-            i, j, h, w = transforms.RandomCrop.get_params(
-                self.img, output_size=(self.patch_size, self.patch_size)
-            )
-            img = self.img if not self.use_generated_img else self.generated_img
-            patch_real = VF.crop(img, i, j, h, w).permute(1, 2, 0)
-            patch_pred = VF.crop(self.training_img, i, j, h, w).permute(1, 2, 0)
-            return patch_pred, patch_real
+        # if self.train:
+        # C, H, W -> H, W, C
+        # i, j, h, w = transforms.RandomCrop.get_params(
+        #     self.img, output_size=(self.patch_size, self.patch_size)
+        # )
+        # img = self.img if not self.use_generated_img else self.generated_img
+        # patch_real = VF.crop(img, i, j, h, w).permute(1, 2, 0)
+        # patch_pred = VF.crop(self.training_img, i, j, h, w).permute(1, 2, 0)
+        # return patch_pred, patch_real
         # training img already in correct shape
-        return self.training_img, self.img.permute(1, 2, 0)
+        return self.training_img, self.img
 
     def __len__(self):
         return self.len if self.train else 1
@@ -395,8 +395,8 @@ class SimpleTrainer:
                     self.dataloader.dataset.use_generated_img = True
                 self.dataloader.dataset.training_img = out_img.permute(2, 0, 1)
                 pred, real = next(iter(self.dataloader))
-                pred = pred.to(self.device).permute(0, 3, 1, 2)
-                real = real.to(self.device).permute(0, 3, 1, 2)
+                pred = pred.to(self.device)  # .permute(0, 3, 1, 2)
+                real = real.to(self.device)  # .permute(0, 3, 1, 2)
                 if self.cfg.collapsing_noise_scheduler:
                     min_step = self.compute_step(200, 300, i / self.cfg.iterations)
                     max_step = self.compute_step(500, 980, i / self.cfg.iterations)
@@ -442,10 +442,11 @@ class SimpleTrainer:
                     align_corners=False,
                     antialias=True,
                 )
-                mse_loss = self.mse_loss(
+                loss = self.mse_loss(
                     downscaled_render, self.dataloader.dataset.img.unsqueeze(0)
                 )
-                loss = mse_loss + sds
+                if cfg.use_sds_loss or cfg.use_sdi_loss:
+                    loss += sds
 
             elif self.cfg.use_altering_loss:
                 if current_loss_type == LossType.MSE:

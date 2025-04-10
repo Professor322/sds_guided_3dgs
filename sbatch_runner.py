@@ -159,6 +159,8 @@ def sds_experiments_2d(cfg: Config, default_run_args):
                                 result_dir = f"results_2d_low_res_noise_level_{str(noise_level).replace('.', '_')}_{checkpoint}_min{min_step}_max{max_step}"
                                 if cfg.use_sdi_loss:
                                     result_dir += "_sdi_loss"
+                                if cfg.use_sds_loss:
+                                    result_dir += "_sds_loss"
                                 if cfg.base_render_as_cond:
                                     current_run_args.append("--base-render-as-cond")
                                     result_dir += "_base_render_as_cond"
