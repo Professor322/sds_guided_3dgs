@@ -51,7 +51,6 @@ class OneImageDataset(Dataset):
         validation_height=256,
         train=True,
         use_generated_img=False,
-        device="cuda",
     ):
         super().__init__()
         self.train = train
@@ -68,17 +67,13 @@ class OneImageDataset(Dataset):
             antialias=True,
             mode="bilinear",
         ).squeeze(0)
-        self.validation_img = (
-            F.interpolate(
-                img.unsqueeze(0),
-                (validation_width, validation_height),
-                align_corners=False,
-                antialias=True,
-                mode="bilinear",
-            )
-            .squeeze(0)
-            .to(device)
-        )
+        self.validation_img = F.interpolate(
+            img.unsqueeze(0),
+            (validation_width, validation_height),
+            align_corners=False,
+            antialias=True,
+            mode="bilinear",
+        ).squeeze(0)
         self.patch_size = patch_size
         self.training_img = None
         self.generated_img = None
@@ -325,6 +320,9 @@ class SimpleTrainer:
         grad_norms = []
         learning_rates = []
         self.one_image_dataset.img = self.one_image_dataset.img.to(self.device)
+        self.one_image_dataset.validation_img = (
+            self.one_image_dataset.validation_img.to(self.device)
+        )
         prev_render = None
         diff = None
 
