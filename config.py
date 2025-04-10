@@ -62,3 +62,5 @@ class Config:
     # implementing method from the paper
     use_gaussian_sr: bool = False
     noise_step_anealing: int = 0
+    ssim_lambda: float = 0.2
+    use_mae_loss: bool = False

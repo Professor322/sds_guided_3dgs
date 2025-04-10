@@ -155,6 +155,7 @@ class SimpleTrainer:
             self.one_image_dataset, batch_size=cfg.batch_size, num_workers=0
         )
         self.mse_loss = torch.nn.MSELoss()
+        self.mae_loss = torch.nn.L1Loss()
         if self.cfg.use_noise_scheduler:
             self.noise_scheduler = self.set_linear_time_strategy(
                 self.cfg.iterations, self.cfg.min_noise_step, self.cfg.max_noise_step
@@ -442,11 +443,24 @@ class SimpleTrainer:
                     align_corners=False,
                     antialias=True,
                 )
-                loss = self.mse_loss(
-                    downscaled_render, self.dataloader.dataset.img.unsqueeze(0)
-                )
+                if cfg.use_mae_loss:
+                    loss = self.mae_loss(
+                        downscaled_render, self.dataloader.dataset.img.unsqueeze(0)
+                    )
+                else:
+                    loss = self.mse_loss(
+                        downscaled_render, self.dataloader.dataset.img.unsqueeze(0)
+                    )
                 if cfg.use_sds_loss or cfg.use_sdi_loss:
-                    loss += sds
+                    loss += sds.squeeze()
+                if cfg.use_ssim_loss:
+                    loss += cfg.ssim_lambda * (
+                        1.0
+                        - fused_ssim(
+                            downscaled_render,
+                            self.dataloader.dataset.img.unsqueeze(0),
+                        )
+                    )
 
             elif self.cfg.use_altering_loss:
                 if current_loss_type == LossType.MSE:

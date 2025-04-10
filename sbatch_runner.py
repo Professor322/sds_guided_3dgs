@@ -210,6 +210,9 @@ def sds_experiments_2d(cfg: Config, default_run_args):
                                 if cfg.use_strategy:
                                     result_dir += "_pruning"
                                     current_run_args.append(f"--use-strategy")
+                                if cfg.use_mae_loss:
+                                    result_dir += "_mae"
+                                    current_run_args.append(f"--use-mae-loss")
 
                                 result_dir += f"_num_points_{num_point}"
                                 current_run_args.append(f"--num-points {num_point}")
