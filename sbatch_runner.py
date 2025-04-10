@@ -216,6 +216,11 @@ def sds_experiments_2d(cfg: Config, default_run_args):
                                 if cfg.use_noise_scheduler:
                                     result_dir += "_noise_sched"
                                     current_run_args.append(f"--use-noise-scheduler")
+                                if cfg.collapsing_noise_scheduler:
+                                    result_dir += "collapsing_noise_sched"
+                                    current_run_args.append(
+                                        "--collapsing-noise-scheduler"
+                                    )
 
                                 result_dir += f"_num_points_{num_point}"
                                 current_run_args.append(f"--num-points {num_point}")
