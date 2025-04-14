@@ -103,7 +103,7 @@ class SimpleTrainer:
         self.cfg = cfg
         if self.cfg.use_strategy:
             self.cfg.strategy = DefaultStrategy(
-                verbose=True,
+                verbose=True, dropout=self.cfg.densification_dropout
             )
         else:
             self.cfg.strategy = NotImplementedError
@@ -507,7 +507,7 @@ class SimpleTrainer:
             torch.cuda.synchronize()
             times[1] += time.time() - start
 
-            if cfg.use_strategy:
+            if self.cfg.use_strategy:
                 self.cfg.strategy.step_post_backward(
                     self.splats, self.optimizers, self.strategy_state, i, info
                 )

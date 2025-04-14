@@ -64,3 +64,4 @@ class Config:
     noise_step_anealing: int = 0
     ssim_lambda: float = 0.2
     use_mae_loss: bool = False
+    densification_dropout: float = 0.0
