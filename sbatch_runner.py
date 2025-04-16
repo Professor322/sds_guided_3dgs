@@ -223,6 +223,9 @@ def sds_experiments_2d(cfg: Config, default_run_args):
                                     )
                                 if cfg.densification_dropout > 0:
                                     result_dir += f"_dens_dropout_{str(cfg.densification_dropout).replace('.', '_')}"
+                                    current_run_args.append(
+                                        f"--densification-dropout {cfg.densification_dropout}"
+                                    )
 
                                 result_dir += f"_num_points_{num_point}"
                                 current_run_args.append(f"--num-points {num_point}")
