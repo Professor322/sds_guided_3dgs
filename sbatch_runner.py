@@ -140,7 +140,7 @@ def sds_experiments_2d(cfg: Config, default_run_args):
     result_dirs = []
     min_step = 20
     max_step = 980
-    lmbds = [0.001, 0.01, 0.1]
+    lmbds = [0.001]
     for lmbd in lmbds:
         for noise_level in noise_levels:
             for checkpoint in checkpoints:
@@ -217,10 +217,12 @@ def sds_experiments_2d(cfg: Config, default_run_args):
                                     result_dir += "_noise_sched"
                                     current_run_args.append(f"--use-noise-scheduler")
                                 if cfg.collapsing_noise_scheduler:
-                                    result_dir += "collapsing_noise_sched"
+                                    result_dir += "_collapsing_noise_sched"
                                     current_run_args.append(
                                         "--collapsing-noise-scheduler"
                                     )
+                                if cfg.densification_dropout > 0:
+                                    result_dir += f"_dens_dropout_{str(cfg.densification_dropout).replace('.', '_')}"
 
                                 result_dir += f"_num_points_{num_point}"
                                 current_run_args.append(f"--num-points {num_point}")
@@ -259,7 +261,7 @@ def main(
 ) -> None:
     # modify parameters for testing
     cfg.base_render_as_cond = False
-    cfg.use_sds_loss = True
+    # cfg.use_sds_loss = True
     cfg.width = 64
     cfg.height = 64
     cfg.render_height = 256
@@ -273,7 +275,9 @@ def main(
     # cfg.use_altering_loss = True
     # cfg.collapsing_noise_scheduler = True
     # cfg.use_lr_scheduler = True
-    # cfg.use_sdi_loss = True
+    # from paper
+    cfg.densification_dropout = 0.7
+    cfg.use_sdi_loss = True
     do_sds_experiments = True
     do_classic_experiments = False
 

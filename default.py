@@ -105,6 +105,8 @@ class DefaultStrategy(Strategy):
         # - grad2d: running accum of the norm of the image plane gradients for each GS.
         # - count: running accum of how many time each GS is visible.
         # - radii: the radii of the GSs (normalized by the image resolution).
+        # just to make sure we are using this file
+        print(f"dropout: {self.dropout}")
         state = {"grad2d": None, "count": None, "scene_scale": scene_scale}
         if self.refine_scale2d_stop_iter > 0:
             state["radii"] = None
