@@ -1,5 +1,5 @@
 from typing import List, Optional, Tuple, Union
-from configs import Config3D
+from configs import Config3D, DefaultStrategy, MCMCStrategy
 import tyro
 import os
 import json
@@ -31,7 +31,7 @@ SBATCH_FILENAME = "3d_training_generated.sbatch"
 def classic_splats_with_validation_3d(cfg: Config3D, default_run_args: List[str]):
     current_run_args = default_run_args.copy()
     scene = cfg.data_dir.split(sep="/")[-1]
-    result_dir = f"result_3d_classic_data_factor_{cfg.data_factor}_{scene}_max_steps_{cfg.max_steps}"
+    result_dir = f"results_3d_classic_data_factor_{cfg.data_factor}_{scene}_max_steps_{cfg.max_steps}"
 
     current_run_args.append(f"--result-dir {result_dir}")
 
@@ -82,6 +82,7 @@ def main(
     do_gaussian_sr_experiments = False
     default_run_args = [
         "python3 trainer_3d.py",
+        "default" if isinstance(cfg.strategy, DefaultStrategy) else "mcmc",
         f"--data-factor {cfg.data_factor}",
         f"--data-dir {cfg.data_dir}",
         f"--disable-viewer" if cfg.disable_viewer else "",
