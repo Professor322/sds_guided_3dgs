@@ -58,7 +58,7 @@ def classic_splats_with_validation_2d(cfg: Config):
         # {"resolution": (256, 256), "img_path": "interpolated_bicycle.png"},
     ]
     classic_run_args = [
-        "python3 simple_trainer_2d.py",
+        "python3 trainer_2d.py",
         f"--iterations {iterations}",
         f"--use-classic-mse_loss",
     ]
@@ -285,7 +285,7 @@ def main(
     do_classic_experiments = False
 
     default_run_args = [
-        "python3 simple_trainer_2d.py",
+        "python3 trainer_2d.py",
         f"--img-path {IMG_PATH}",
         f"--iterations {ITERATIONS}",
         f"--num-points {cfg.num_points}",
