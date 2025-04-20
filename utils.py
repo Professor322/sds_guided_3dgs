@@ -1,3 +1,5 @@
+# https://github.com/nerfstudio-project/gsplat/blob/main/examples/utils.py
+
 import random
 
 import numpy as np
@@ -222,3 +224,18 @@ def apply_depth_colormap(
     if acc is not None:
         img = img * acc + (1.0 - acc)
     return img
+
+
+def set_linear_noise_schedule(
+    output_shape, min_diffusion_steps=20, max_diffusion_steps=980
+):
+    return (
+        torch.linspace(min_diffusion_steps, max_diffusion_steps, output_shape)
+        .flip(0)
+        .to(torch.long)
+    )
+
+
+def compute_collapsing_noise_step(min_step, max_step, iter_frac):
+    step = max_step - (max_step - min_step) * np.sqrt(iter_frac)
+    return int(step)

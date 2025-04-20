@@ -1,3 +1,5 @@
+# baseline code was taken from https://github.com/nerfstudio-project/gsplat/blob/main/examples/image_fitting.py
+
 import math
 import os
 import time
@@ -26,7 +28,7 @@ from torch.utils.data import Dataset, DataLoader
 import torchvision.transforms as transforms
 import torchvision.transforms.functional as VF
 from PIL import Image
-from config import Config
+from configs import Config2D
 import tqdm
 from gsplat.strategy import DefaultStrategy
 from enum import Enum
@@ -99,7 +101,7 @@ class OneImageDataset(Dataset):
 class SimpleTrainer:
     """Trains random gaussians to fit an image."""
 
-    def __init__(self, cfg: Config = Config()):
+    def __init__(self, cfg: Config2D = Config2D()):
         self.cfg = cfg
         if self.cfg.use_strategy:
             self.cfg.strategy = DefaultStrategy(
@@ -689,7 +691,7 @@ class SimpleTrainer:
 
 
 def main(
-    cfg: Config,
+    cfg: Config2D,
 ) -> None:
 
     trainer = SimpleTrainer(cfg=cfg)
@@ -700,5 +702,5 @@ def main(
 
 
 if __name__ == "__main__":
-    cfg = tyro.cli(Config)
+    cfg = tyro.cli(Config2D)
     main(cfg)

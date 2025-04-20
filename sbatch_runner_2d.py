@@ -1,4 +1,4 @@
-from config import Config
+from configs import Config2D
 import tyro
 import os
 import json
@@ -32,7 +32,7 @@ echo "starting 2d training"
 SBATCH_FILENAME = "2d_training_generated.sbatch"
 
 
-def classic_splats_with_validation_2d(cfg: Config):
+def classic_splats_with_validation_2d(cfg: Config2D):
     # validate on the original image downscaled to 256x256
 
     validataion_width = 256
@@ -114,7 +114,7 @@ def classic_splats_with_validation_2d(cfg: Config):
     return result_dirs
 
 
-def sds_experiments_2d(cfg: Config, default_run_args):
+def sds_experiments_2d(cfg: Config2D, default_run_args):
     noise_levels = [0.0]
     # checkpoints = [2999, 6999, 29999]
     checkpoints = [29999]
@@ -260,7 +260,7 @@ def sds_experiments_2d(cfg: Config, default_run_args):
 
 
 def main(
-    cfg: Config,
+    cfg: Config2D,
 ) -> None:
     # modify parameters for testing
     cfg.base_render_as_cond = False
@@ -328,5 +328,5 @@ def main(
 
 
 if __name__ == "__main__":
-    cfg = tyro.cli(Config)
+    cfg = tyro.cli(Config2D)
     main(cfg)

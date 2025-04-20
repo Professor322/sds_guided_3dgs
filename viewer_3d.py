@@ -1,3 +1,5 @@
+# taken from https://github.com/nerfstudio-project/gsplat/blob/main/examples/simple_viewer.py
+
 """A simple example to render a (large-scale) Gaussian Splats
 
 ```bash

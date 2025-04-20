@@ -1,10 +1,11 @@
+# baseline code was taken from https://github.com/nerfstudio-project/gsplat/blob/main/examples/simple_trainer.py
+
 import json
 import math
 import os
 import time
-from dataclasses import dataclass, field
 from collections import defaultdict
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Dict, List, Optional, Tuple
 
 import imageio
 import nerfview
@@ -27,8 +28,16 @@ from torch.utils.tensorboard import SummaryWriter
 from torchmetrics.image import PeakSignalNoiseRatio, StructuralSimilarityIndexMeasure
 from fused_ssim import fused_ssim
 from torchmetrics.image.lpip import LearnedPerceptualImagePatchSimilarity
-from typing_extensions import Literal, assert_never
-from utils import AppearanceOptModule, CameraOptModule, knn, rgb_to_sh, set_random_seed
+from typing_extensions import assert_never
+from utils import (
+    AppearanceOptModule,
+    CameraOptModule,
+    knn,
+    rgb_to_sh,
+    set_random_seed,
+    set_linear_noise_schedule,
+    compute_collapsing_noise_step,
+)
 from lib_bilagrid import (
     BilateralGrid,
     slice,
@@ -43,151 +52,8 @@ from gsplat.strategy import DefaultStrategy, MCMCStrategy
 
 # from gsplat.optimizers import SelectiveAdam
 
-
-@dataclass
-class Config:
-    # Disable viewer
-    disable_viewer: bool = False
-    # Path to the .pt files. If provide, it will skip training and run evaluation only.
-    # When gaussian SR is enabled, checkpoint should be provided
-    ckpt: Optional[List[str]] = None
-    # Name of compression strategy to use
-    compression: Optional[Literal["png"]] = None
-    # Render trajectory path
-    render_traj_path: str = "interp"
-
-    # Path to the Mip-NeRF 360 dataset
-    data_dir: str = "data/360_v2/garden"
-    # Downsample factor for the dataset
-    data_factor: int = 4
-    # Directory to save results
-    result_dir: str = "results/garden"
-    # Every N images there is a test image
-    test_every: int = 8
-    # Random crop size for training  (experimental)
-    patch_size: Optional[int] = None
-    # A global scaler that applies to the scene size related parameters
-    global_scale: float = 1.0
-    # Normalize the world space
-    normalize_world_space: bool = True
-    # Camera model
-    camera_model: Literal["pinhole", "ortho", "fisheye"] = "pinhole"
-
-    # Port for the viewer server
-    port: int = 8080
-
-    # Batch size for training. Learning rates are scaled automatically
-    batch_size: int = 1
-    # A global factor to scale the number of training steps
-    steps_scaler: float = 1.0
-
-    # Number of training steps
-    max_steps: int = 30_000
-    # Steps to evaluate the model
-    eval_steps: List[int] = field(default_factory=lambda: [3_000, 7_000, 30_000])
-    # Steps to save the model
-    save_steps: List[int] = field(default_factory=lambda: [3_000, 7_000, 30_000])
-
-    # Initialization strategy
-    init_type: str = "sfm"
-    # Initial number of GSs. Ignored if using sfm
-    init_num_pts: int = 100_000
-    # Initial extent of GSs as a multiple of the camera extent. Ignored if using sfm
-    init_extent: float = 3.0
-    # Degree of spherical harmonics
-    sh_degree: int = 3
-    # Turn on another SH degree every this steps
-    sh_degree_interval: int = 1000
-    # Initial opacity of GS
-    init_opa: float = 0.1
-    # Initial scale of GS
-    init_scale: float = 1.0
-    # Weight for SSIM loss
-    ssim_lambda: float = 0.2
-    # Near plane clipping distance
-    near_plane: float = 0.01
-    # Far plane clipping distance
-    far_plane: float = 1e10
-
-    # Strategy for GS densification
-    strategy: Union[DefaultStrategy, MCMCStrategy] = field(
-        default_factory=DefaultStrategy
-    )
-    # Use packed mode for rasterization, this leads to less memory usage but slightly slower.
-    packed: bool = False
-    # Use sparse gradients for optimization. (experimental)
-    sparse_grad: bool = False
-    # Use visible adam from Taming 3DGS. (experimental)
-    visible_adam: bool = False
-    # Anti-aliasing in rasterization. Might slightly hurt quantitative metrics.
-    antialiased: bool = False
-
-    # Use random background for training to discourage transparency
-    random_bkgd: bool = False
-
-    # Opacity regularization
-    opacity_reg: float = 0.0
-    # Scale regularization
-    scale_reg: float = 0.0
-
-    # Enable camera optimization.
-    pose_opt: bool = False
-    # Learning rate for camera optimization
-    pose_opt_lr: float = 1e-5
-    # Regularization for camera optimization as weight decay
-    pose_opt_reg: float = 1e-6
-    # Add noise to camera extrinsics. This is only to test the camera pose optimization.
-    pose_noise: float = 0.0
-
-    # Enable appearance optimization. (experimental)
-    app_opt: bool = False
-    # Appearance embedding dimension
-    app_embed_dim: int = 16
-    # Learning rate for appearance optimization
-    app_opt_lr: float = 1e-3
-    # Regularization for appearance optimization as weight decay
-    app_opt_reg: float = 1e-6
-
-    # Enable bilateral grid. (experimental)
-    use_bilateral_grid: bool = False
-    # Shape of the bilateral grid (X, Y, W)
-    bilateral_grid_shape: Tuple[int, int, int] = (16, 16, 8)
-
-    # Enable depth loss. (experimental)
-    depth_loss: bool = False
-    # Weight for depth loss
-    depth_lambda: float = 1e-2
-
-    # Dump information to tensorboard every this steps
-    tb_every: int = 100
-    # Save training images to tensorboard
-    tb_save_image: bool = True
-
-    lpips_net: Literal["vgg", "alex"] = "alex"
-
-    # method to enhance quality of the pretrained
-    # low resolution splat
-    gaussian_sr: bool = False
-    scale_factor: float = 0.0
-
-    def adjust_steps(self, factor: float):
-        self.eval_steps = [int(i * factor) for i in self.eval_steps]
-        self.save_steps = [int(i * factor) for i in self.save_steps]
-        self.max_steps = int(self.max_steps * factor)
-        self.sh_degree_interval = int(self.sh_degree_interval * factor)
-
-        strategy = self.strategy
-        if isinstance(strategy, DefaultStrategy):
-            strategy.refine_start_iter = int(strategy.refine_start_iter * factor)
-            strategy.refine_stop_iter = int(strategy.refine_stop_iter * factor)
-            strategy.reset_every = int(strategy.reset_every * factor)
-            strategy.refine_every = int(strategy.refine_every * factor)
-        elif isinstance(strategy, MCMCStrategy):
-            strategy.refine_start_iter = int(strategy.refine_start_iter * factor)
-            strategy.refine_stop_iter = int(strategy.refine_stop_iter * factor)
-            strategy.refine_every = int(strategy.refine_every * factor)
-        else:
-            assert_never(strategy)
+from guidance import SDILoss3DGS, SDSLoss3DGS
+from configs import Config3D
 
 
 def create_splats(
@@ -326,7 +192,7 @@ class Runner:
     """Engine for training and testing."""
 
     def __init__(
-        self, local_rank: int, world_rank, world_size: int, cfg: Config
+        self, local_rank: int, world_rank, world_size: int, cfg: Config3D
     ) -> None:
         set_random_seed(42 + local_rank)
 
@@ -400,7 +266,6 @@ class Runner:
             width, height = list(self.parser.imsize_dict.values())[0]
             self.render_width = int(width * cfg.scale_factor)
             self.render_height = int(height * cfg.scale_factor)
-            print(width, height, self.render_width, self.render_height)
             ckpts = [
                 torch.load(file, map_location=self.device, weights_only=True)
                 for file in cfg.ckpt
@@ -435,6 +300,17 @@ class Runner:
                 test_every=cfg.test_every,
             )
             self.valset = Dataset(self.val_parser, split="val")
+            # initialize SDS loss
+            if self.cfg.sds_loss_type == "sdi":
+                self.sds_loss = SDILoss3DGS(prompt=self.cfg.prompt)
+            elif self.cfg.sds_loss_type == "sds":
+                self.sds_loss = SDSLoss3DGS(prompt=self.cfg.prompt)
+
+            # Set noise schedule if needed
+            if self.cfg.noise_scheduler_type == "linear":
+                self.noise_scheduler = set_linear_noise_schedule(
+                    self.cfg.max_steps, self.cfg.min_noise_step, self.cfg.max_noise_step
+                )
 
         # Densification Strategy
         self.cfg.strategy.check_sanity(self.splats, self.optimizers)
@@ -791,6 +667,44 @@ class Runner:
                     + cfg.scale_reg * torch.abs(torch.exp(self.splats["scales"])).mean()
                 )
 
+            if self.cfg.gaussian_sr and self.cfg.sds_loss_type != "none":
+                if self.cfg.noise_scheduler_type == "collapsing":
+                    min_step = compute_collapsing_noise_step(
+                        200, 300, step / self.cfg.max_steps
+                    )
+                    max_step = compute_collapsing_noise_step(
+                        500, 980, step / self.cfg.max_steps
+                    )
+                elif self.cfg.noise_scheduler_type == "annealing":
+                    min_step = int(
+                        min(
+                            self.cfg.min_noise_step,
+                            self.cfg.max_noise_step
+                            - step / self.cfg.noise_step_annealing,
+                        )
+                    )
+                    max_step = self.cfg.max_noise_step
+                else:
+                    min_step = self.cfg.min_noise_step
+                    max_step = self.cfg.max_noise_step
+
+                sds_loss = (
+                    self.sds_loss(
+                        images=upscaled_colors,
+                        original=pixels,
+                        min_step=min_step,
+                        max_step=max_step,
+                        lowres_noise_level=self.cfg.condition_noise,
+                        scheduler_timestep=self.noise_scheduler[step]
+                        if self.cfg.noise_scheduler_type == "linear"
+                        else None,
+                        downscale_condition=False,
+                        guidance_scale=cfg.guidance_scale,
+                    )
+                    * self.cfg.sds_lambda
+                )
+                loss += sds_loss.squeeze()
+
             loss.backward()
 
             desc = f"loss={loss.item():.3f}| " f"sh degree={sh_degree_to_use}| "
@@ -948,7 +862,6 @@ class Runner:
         cfg = self.cfg
         device = self.device
         world_rank = self.world_rank
-        world_size = self.world_size
 
         valloader = torch.utils.data.DataLoader(
             self.valset, batch_size=1, shuffle=False, num_workers=1
@@ -1137,7 +1050,7 @@ class Runner:
         return render_colors[0].cpu().numpy()
 
 
-def main(local_rank: int, world_rank, world_size: int, cfg: Config):
+def main(local_rank: int, world_rank, world_size: int, cfg: Config3D):
     if world_size > 1 and not cfg.disable_viewer:
         cfg.disable_viewer = True
         if world_rank == 0:
@@ -1179,18 +1092,18 @@ if __name__ == "__main__":
 
     """
 
-    # Config objects we can choose between.
+    # Config3D objects we can choose between.
     # Each is a tuple of (CLI description, config object).
     configs = {
         "default": (
             "Gaussian splatting training using densification heuristics from the original paper.",
-            Config(
+            Config3D(
                 strategy=DefaultStrategy(verbose=True),
             ),
         ),
         "mcmc": (
             "Gaussian splatting training using densification from the paper '3D Gaussian Splatting as Markov Chain Monte Carlo'.",
-            Config(
+            Config3D(
                 init_opa=0.5,
                 init_scale=0.1,
                 opacity_reg=0.01,
