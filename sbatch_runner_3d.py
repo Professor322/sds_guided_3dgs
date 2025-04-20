@@ -5,7 +5,7 @@ import os
 import json
 import glob
 
-DEBUG = True
+DEBUG = False
 GET_PLOTS = False
 TOP_PSNRS = False
 
