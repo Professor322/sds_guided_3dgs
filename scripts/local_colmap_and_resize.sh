@@ -26,19 +26,19 @@ CAMERA=${2:-OPENCV}
 
 ### Feature extraction
 
-colmap feature_extractor \
-    --database_path "$DATASET_PATH"/database.db \
-    --image_path "$DATASET_PATH"/images \
-    --ImageReader.single_camera 1 \
-    --ImageReader.camera_model "$CAMERA" \
-    --SiftExtraction.use_gpu "$USE_GPU"
+# colmap feature_extractor \
+#     --database_path "$DATASET_PATH"/database.db \
+#     --image_path "$DATASET_PATH"/images \
+#     --ImageReader.single_camera 1 \
+#     --ImageReader.camera_model "$CAMERA" \
+#     --SiftExtraction.use_gpu "$USE_GPU"
 
 
 ### Feature matching
 
-colmap exhaustive_matcher \
-    --database_path "$DATASET_PATH"/database.db \
-    --SiftMatching.use_gpu "$USE_GPU"
+# colmap exhaustive_matcher \
+#     --database_path "$DATASET_PATH"/database.db \
+#     --SiftMatching.use_gpu "$USE_GPU"
 
 ## Use if your scene has > 500 images
 ## Replace this path with your own local copy of the file.
@@ -54,12 +54,12 @@ colmap exhaustive_matcher \
 
 # The default Mapper tolerance is unnecessarily large,
 # decreasing it speeds up bundle adjustment steps.
-mkdir -p "$DATASET_PATH"/sparse
-colmap mapper \
-    --database_path "$DATASET_PATH"/database.db \
-    --image_path "$DATASET_PATH"/images \
-    --output_path "$DATASET_PATH"/sparse \
-    --Mapper.ba_global_function_tolerance=0.000001
+# mkdir -p "$DATASET_PATH"/sparse
+# colmap mapper \
+#     --database_path "$DATASET_PATH"/database.db \
+#     --image_path "$DATASET_PATH"/images \
+#     --output_path "$DATASET_PATH"/sparse \
+#     --Mapper.ba_global_function_tolerance=0.000001
 
 
 ### Image undistortion
@@ -74,20 +74,38 @@ colmap mapper \
 
 # Resize images.
 
-cp -r "$DATASET_PATH"/images "$DATASET_PATH"/images_2
+# cp -r "$DATASET_PATH"/images "$DATASET_PATH"/images_2
 
-pushd "$DATASET_PATH"/images_2
-ls | xargs -P 8 -I {} mogrify -resize 50% {}
+# pushd "$DATASET_PATH"/images_2
+# ls | xargs -P 8 -I {} mogrify -resize 50% {}
+# popd
+
+# cp -r "$DATASET_PATH"/images "$DATASET_PATH"/images_4
+
+# pushd "$DATASET_PATH"/images_4
+# ls | xargs -P 8 -I {} mogrify -resize 25% {}
+# popd
+
+# cp -r "$DATASET_PATH"/images "$DATASET_PATH"/images_8
+
+# pushd "$DATASET_PATH"/images_8
+# ls | xargs -P 8 -I {} mogrify -resize 12.5% {}
+# popd
+
+cp -r "$DATASET_PATH"/images "$DATASET_PATH"/images_16
+
+pushd "$DATASET_PATH"/images_16
+ls | xargs -P 8 -I {} mogrify -resize 6.25% {}
 popd
 
-cp -r "$DATASET_PATH"/images "$DATASET_PATH"/images_4
+cp -r "$DATASET_PATH"/images "$DATASET_PATH"/images_32
 
-pushd "$DATASET_PATH"/images_4
-ls | xargs -P 8 -I {} mogrify -resize 25% {}
+pushd "$DATASET_PATH"/images_32
+ls | xargs -P 8 -I {} mogrify -resize 3.125% {}
 popd
 
-cp -r "$DATASET_PATH"/images "$DATASET_PATH"/images_8
+cp -r "$DATASET_PATH"/images "$DATASET_PATH"/images_64
 
-pushd "$DATASET_PATH"/images_8
-ls | xargs -P 8 -I {} mogrify -resize 12.5% {}
+pushd "$DATASET_PATH"/images_64
+ls | xargs -P 8 -I {} mogrify -resize 1.5625% {}
 popd

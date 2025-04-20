@@ -49,6 +49,7 @@ class Config:
     # Disable viewer
     disable_viewer: bool = False
     # Path to the .pt files. If provide, it will skip training and run evaluation only.
+    # When gaussian SR is enabled, checkpoint should be provided
     ckpt: Optional[List[str]] = None
     # Name of compression strategy to use
     compression: Optional[Literal["png"]] = None
@@ -83,9 +84,9 @@ class Config:
     # Number of training steps
     max_steps: int = 30_000
     # Steps to evaluate the model
-    eval_steps: List[int] = field(default_factory=lambda: [7_000, 30_000])
+    eval_steps: List[int] = field(default_factory=lambda: [3_000, 7_000, 30_000])
     # Steps to save the model
-    save_steps: List[int] = field(default_factory=lambda: [7_000, 30_000])
+    save_steps: List[int] = field(default_factory=lambda: [3_000, 7_000, 30_000])
 
     # Initialization strategy
     init_type: str = "sfm"
@@ -164,6 +165,11 @@ class Config:
 
     lpips_net: Literal["vgg", "alex"] = "alex"
 
+    # method to enhance quality of the pretrained
+    # low resolution splat
+    gaussian_sr: bool = False
+    scale_factor: float = 0.0
+
     def adjust_steps(self, factor: float):
         self.eval_steps = [int(i * factor) for i in self.eval_steps]
         self.save_steps = [int(i * factor) for i in self.save_steps]
@@ -184,7 +190,7 @@ class Config:
             assert_never(strategy)
 
 
-def create_splats_with_optimizers(
+def create_splats(
     parser: Parser,
     init_type: str = "sfm",
     init_num_pts: int = 100_000,
@@ -193,14 +199,11 @@ def create_splats_with_optimizers(
     init_scale: float = 1.0,
     scene_scale: float = 1.0,
     sh_degree: int = 3,
-    sparse_grad: bool = False,
-    visible_adam: bool = False,
-    batch_size: int = 1,
     feature_dim: Optional[int] = None,
     device: str = "cuda",
     world_rank: int = 0,
     world_size: int = 1,
-) -> Tuple[torch.nn.ParameterDict, Dict[str, torch.optim.Optimizer]]:
+):
     if init_type == "sfm":
         points = torch.from_numpy(parser.points).float()
         rgbs = torch.from_numpy(parser.points_rgb / 255.0).float()
@@ -246,10 +249,17 @@ def create_splats_with_optimizers(
         params.append(("colors", torch.nn.Parameter(colors), 2.5e-3))
 
     splats = torch.nn.ParameterDict({n: v for n, v, _ in params}).to(device)
-    # Scale learning rate based on batch size, reference:
-    # https://www.cs.princeton.edu/~smalladi/blog/2024/01/22/SDEs-ScalingRules/
-    # Note that this would not make the training exactly equivalent, see
-    # https://arxiv.org/pdf/2402.18824v1
+    return splats, params
+
+
+def create_optimizers(
+    splats: torch.nn.ParameterDict,
+    params: List[Tuple],
+    sparse_grad: bool = False,
+    batch_size: int = 1,
+    world_size: int = 1,
+    visible_adam: bool = False,
+):
     BS = batch_size * world_size
     optimizer_class = None
     if sparse_grad:
@@ -267,6 +277,48 @@ def create_splats_with_optimizers(
         )
         for name, _, lr in params
     }
+    return optimizers
+
+
+def create_splats_with_optimizers(
+    parser: Parser,
+    init_type: str = "sfm",
+    init_num_pts: int = 100_000,
+    init_extent: float = 3.0,
+    init_opacity: float = 0.1,
+    init_scale: float = 1.0,
+    scene_scale: float = 1.0,
+    sh_degree: int = 3,
+    sparse_grad: bool = False,
+    visible_adam: bool = False,
+    batch_size: int = 1,
+    feature_dim: Optional[int] = None,
+    device: str = "cuda",
+    world_rank: int = 0,
+    world_size: int = 1,
+):
+    splats, params = create_splats(
+        parser=parser,
+        init_type=init_type,
+        init_num_pts=init_num_pts,
+        init_extent=init_extent,
+        init_opacity=init_opacity,
+        init_scale=init_scale,
+        scene_scale=scene_scale,
+        sh_degree=sh_degree,
+        feature_dim=feature_dim,
+        device=device,
+        world_rank=world_rank,
+        world_size=world_size,
+    )
+    optimizers = create_optimizers(
+        splats=splats,
+        params=params,
+        sparse_grad=sparse_grad,
+        batch_size=batch_size,
+        world_size=world_size,
+        visible_adam=visible_adam,
+    )
     return splats, optimizers
 
 
@@ -305,6 +357,8 @@ class Runner:
             normalize=cfg.normalize_world_space,
             test_every=cfg.test_every,
         )
+        self.val_parser = self.parser
+
         self.trainset = Dataset(
             self.parser,
             split="train",
@@ -335,6 +389,52 @@ class Runner:
             world_size=world_size,
         )
         print("Model initialized. Number of GS:", len(self.splats["means"]))
+        if self.cfg.gaussian_sr:
+            if self.cfg.scale_factor <= 0.0:
+                raise ValueError("Set scale factor to use gaussian SR")
+            if self.cfg.ckpt is None:
+                raise ValueError(
+                    "Checkpoint should be provided when gaussian SR is set"
+                )
+            print("Loading checkpoint for initialization")
+            width, height = list(self.parser.imsize_dict.values())[0]
+            self.render_width = int(width * cfg.scale_factor)
+            self.render_height = int(height * cfg.scale_factor)
+            print(width, height, self.render_width, self.render_height)
+            ckpts = [
+                torch.load(file, map_location=self.device, weights_only=True)
+                for file in cfg.ckpt
+            ]
+            for k in self.splats.keys():
+                self.splats[k].data = torch.cat([ckpt["splats"][k] for ckpt in ckpts])
+            # create low res splats for rendering
+            self.splats_low_res, _ = create_splats(
+                self.parser,
+                init_type=cfg.init_type,
+                init_num_pts=cfg.init_num_pts,
+                init_extent=cfg.init_extent,
+                init_opacity=cfg.init_opa,
+                init_scale=cfg.init_scale,
+                scene_scale=self.scene_scale,
+                sh_degree=cfg.sh_degree,
+                feature_dim=feature_dim,
+                device=self.device,
+                world_rank=world_rank,
+                world_size=world_size,
+            )
+            # TODO: no need to build grad graph, need to optimize that
+            for k in self.splats.keys():
+                self.splats_low_res[k].data = torch.cat(
+                    [ckpt["splats"][k] for ckpt in ckpts]
+                )
+            # redefine validation dataset
+            self.val_parser = Parser(
+                data_dir=cfg.data_dir,
+                factor=int(cfg.data_factor // cfg.scale_factor),
+                normalize=cfg.normalize_world_space,
+                test_every=cfg.test_every,
+            )
+            self.valset = Dataset(self.val_parser, split="val")
 
         # Densification Strategy
         self.cfg.strategy.check_sanity(self.splats, self.optimizers)
@@ -433,7 +533,7 @@ class Runner:
 
         # Viewer
         if not self.cfg.disable_viewer:
-            self.server = viser.ViserServer(port=cfg.port, verbose=True)
+            self.server = viser.ViserServer(port=cfg.port)
             self.viewer = nerfview.Viewer(
                 server=self.server,
                 render_fn=self._viewer_render_fn,
@@ -565,9 +665,14 @@ class Runner:
             except StopIteration:
                 trainloader_iter = iter(trainloader)
                 data = next(trainloader_iter)
+            # TODO in case of gaussianSR get pose and render it from low res splat
+            # for now use pose from training image, and pixels from training image as well
 
             camtoworlds = camtoworlds_gt = data["camtoworld"].to(device)  # [1, 4, 4]
             Ks = data["K"].to(device)  # [1, 3, 3]
+            if self.cfg.gaussian_sr:
+                Ks[:2, :] *= self.cfg.scale_factor
+
             pixels = data["image"].to(device) / 255.0  # [1, H, W, 3]
             num_train_rays_per_step = (
                 pixels.shape[0] * pixels.shape[1] * pixels.shape[2]
@@ -578,7 +683,11 @@ class Runner:
                 points = data["points"].to(device)  # [1, M, 2]
                 depths_gt = data["depths"].to(device)  # [1, M]
 
-            height, width = pixels.shape[1:3]
+            height, width = (
+                pixels.shape[1:3]
+                if not self.cfg.gaussian_sr
+                else (self.render_height, self.render_width)
+            )
 
             if cfg.pose_noise:
                 camtoworlds = self.pose_perturb(camtoworlds, image_ids)
@@ -629,6 +738,18 @@ class Runner:
             )
 
             # loss
+            if self.cfg.gaussian_sr:
+                low_res_height, low_res_width = pixels.shape[1:3]
+                upscaled_colors = colors
+                colors = F.interpolate(
+                    colors.permute(0, 3, 1, 2),
+                    (low_res_height, low_res_width),
+                    mode="bilinear",
+                    align_corners=False,
+                    antialias=True,
+                )
+                # permute back for compatibility
+                colors = colors.permute(0, 2, 3, 1)
             l1loss = F.l1_loss(colors, pixels)
             ssimloss = 1.0 - fused_ssim(
                 colors.permute(0, 3, 1, 2), pixels.permute(0, 3, 1, 2), padding="valid"
@@ -698,6 +819,11 @@ class Runner:
                     self.writer.add_image(
                         "train/render", canvas, step, dataformats="HWC"
                     )
+                    if self.cfg.gaussian_sr:
+                        image = upscaled_colors.squeeze(0).detach().cpu().numpy()
+                        self.writer.add_image(
+                            "train/upscaled_render", image, step, dataformats="HWC"
+                        )
                 self.writer.flush()
 
             # save checkpoint before updating the model
@@ -903,7 +1029,7 @@ class Runner:
         cfg = self.cfg
         device = self.device
 
-        camtoworlds_all = self.parser.camtoworlds[5:-5]
+        camtoworlds_all = self.val_parser.camtoworlds[5:-5]
         if cfg.render_traj_path == "interp":
             camtoworlds_all = generate_interpolated_path(
                 camtoworlds_all, 1
@@ -916,8 +1042,8 @@ class Runner:
         elif cfg.render_traj_path == "spiral":
             camtoworlds_all = generate_spiral_path(
                 camtoworlds_all,
-                bounds=self.parser.bounds * self.scene_scale,
-                spiral_scale_r=self.parser.extconf["spiral_radius_scale"],
+                bounds=self.val_parser.bounds * self.scene_scale,
+                spiral_scale_r=self.val_parser.extconf["spiral_radius_scale"],
             )
         else:
             raise ValueError(
@@ -935,8 +1061,12 @@ class Runner:
         )  # [N, 4, 4]
 
         camtoworlds_all = torch.from_numpy(camtoworlds_all).float().to(device)
-        K = torch.from_numpy(list(self.parser.Ks_dict.values())[0]).float().to(device)
-        width, height = list(self.parser.imsize_dict.values())[0]
+        K = (
+            torch.from_numpy(list(self.val_parser.Ks_dict.values())[0])
+            .float()
+            .to(device)
+        )
+        width, height = list(self.val_parser.imsize_dict.values())[0]
 
         # save to video
         video_dir = f"{cfg.result_dir}/videos"
@@ -1015,7 +1145,7 @@ def main(local_rank: int, world_rank, world_size: int, cfg: Config):
 
     runner = Runner(local_rank, world_rank, world_size, cfg)
 
-    if cfg.ckpt is not None:
+    if cfg.ckpt is not None and cfg.gaussian_sr is False:
         # run eval only
         ckpts = [
             torch.load(file, map_location=runner.device, weights_only=True)
