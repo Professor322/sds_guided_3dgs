@@ -49,25 +49,45 @@ def classic_splats_with_validation_3d(cfg: Config3D, default_run_args: List[str]
 
 
 def sds_experiments_3d(cfg: Config3D, default_run_args: List[str]):
-    # result_dirs = []
-    # checkpoint_path = []
-    # default_scale_factor = 2
+    cfg.gaussian_sr = True
+    cfg.sds_loss_type = "sdi"
+    cfg.noise_scheduler_type = "annealing"
+    cfg.scale_factor = 4
 
-    # file_content = (
-    #     SBATCH_TEMPLATE
-    #     + "\n"
-    #     + f"echo '{result_dir}'\n"
-    #     + " ".join(current_run_args)
-    # )
-    # result_dirs.append(result_dir)
-    # if DEBUG:
-    #     print(file_content)
-    # with open(SBATCH_FILENAME, "w") as file:
-    #     file.write(file_content)
-    # if not DEBUG and not GET_PLOTS and not TOP_PSNRS:
-    #     os.system(f"sbatch {SBATCH_FILENAME}")
-    # return result_dirs
-    return []
+    current_run_args = default_run_args.copy()
+    scene = cfg.data_dir.split(sep="/")[-1]
+    checkpoint_path = f"results_3d_classic_data_factor_{cfg.data_factor}_{scene}_max_steps_{cfg.max_steps}"
+    checkpoint_path += "/ckpts/ckpt_29999_rank0.pt"
+    result_dir = f"results_3d_classic_data_factor_{cfg.data_factor}_{scene}_max_steps_{cfg.max_steps}"
+
+    if cfg.gaussian_sr:
+        current_run_args.append("--gaussian-sr")
+        result_dir += "_gaussian_sr"
+        if cfg.noise_scheduler_type != "none":
+            current_run_args.append(
+                f"--noise-scheduler-type {cfg.noise_scheduler_type}"
+            )
+            result_dir += f"_noise_scheduler_{cfg.noise_scheduler_type}"
+        if cfg.sds_loss_type != "none":
+            current_run_args.append(f"--sds-loss-type {cfg.sds_loss_type}")
+            result_dir += f"_{cfg.sds_loss_type}"
+        if cfg.scale_factor > 0.0:
+            current_run_args.append(f"--scale-factor {cfg.scale_factor}")
+            result_dir += f"_scale_factor_{cfg.scale_factor}"
+        if checkpoint_path != "":
+            current_run_args.append(f"--ckpt {checkpoint_path}")
+
+    current_run_args.append(f"--result-dir {result_dir}")
+    file_content = (
+        SBATCH_TEMPLATE + "\n" + f"echo '{result_dir}'\n" + " ".join(current_run_args)
+    )
+    if DEBUG:
+        print(file_content)
+    with open(SBATCH_FILENAME, "w") as file:
+        file.write(file_content)
+    if not DEBUG and not GET_PLOTS and not TOP_PSNRS:
+        os.system(f"sbatch {SBATCH_FILENAME}")
+    return [result_dir]
 
 
 def main(
@@ -78,8 +98,8 @@ def main(
     cfg.data_dir = "data/360_v2/bicycle"
     cfg.disable_viewer = True
 
-    do_classic_experiments = True
-    do_gaussian_sr_experiments = False
+    do_classic_experiments = False
+    do_gaussian_sr_experiments = True
     default_run_args = [
         "python3 trainer_3d.py",
         "default" if isinstance(cfg.strategy, DefaultStrategy) else "mcmc",
