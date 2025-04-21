@@ -86,6 +86,8 @@ def sds_experiments_3d(cfg: Config3D, default_run_args: List[str]):
     cfg.scale_factor = 4
     cfg.loss_type = "l1loss"
     cfg.data_factor = 64
+    # cfg.min_noise_step = 10
+    # cfg.max_noise_step = 50
 
     if cfg.sds_loss_type == "none":
         cfg.densification_dropout = 0.0
@@ -112,6 +114,11 @@ def sds_experiments_3d(cfg: Config3D, default_run_args: List[str]):
                     f"--noise-scheduler-type {cfg.noise_scheduler_type}"
                 )
                 result_dir += f"_noise_scheduler_{cfg.noise_scheduler_type}"
+
+            # current_run_args.append(f"--min-noise-step {cfg.min_noise_step}")
+            # current_run_args.append(f"--max-noise-step {cfg.max_noise_step}")
+            # result_dir += f"_min_step_{cfg.min_noise_step}_max_step_{cfg.min_noise_step}"
+
         if cfg.scale_factor > 0.0:
             current_run_args.append(f"--scale-factor {cfg.scale_factor}")
             result_dir += f"_scale_factor_{cfg.scale_factor}"

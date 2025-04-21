@@ -702,7 +702,7 @@ class Runner:
                     )
                 elif self.cfg.noise_scheduler_type == "annealing":
                     min_step = int(
-                        min(
+                        max(
                             self.cfg.min_noise_step,
                             self.cfg.max_noise_step
                             - step / self.cfg.noise_step_annealing,
