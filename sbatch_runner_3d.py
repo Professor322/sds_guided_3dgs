@@ -84,7 +84,7 @@ def sds_experiments_3d(cfg: Config3D, default_run_args: List[str]):
     cfg.sds_loss_type = "sdi"
     cfg.noise_scheduler_type = "annealing"
     cfg.scale_factor = 4
-    cfg.loss_type = "l2loss"
+    cfg.loss_type = "l1loss"
     cfg.data_factor = 64
 
     if cfg.sds_loss_type == "none":
@@ -97,6 +97,9 @@ def sds_experiments_3d(cfg: Config3D, default_run_args: List[str]):
     result_dir = f"results_3d_classic_data_factor_{cfg.data_factor}_{scene}_max_steps_{cfg.max_steps}"
 
     current_run_args.append(f"--densification-dropout {cfg.densification_dropout}")
+
+    cfg.max_steps = 15_000
+    current_run_args.append(f"--max-steps {cfg.max_steps}")
     if cfg.gaussian_sr:
         current_run_args.append("--gaussian-sr")
         result_dir += "_gaussian_sr"
@@ -144,8 +147,8 @@ def main(
     cfg.data_dir = "data/360_v2/bicycle"
     cfg.disable_viewer = True
 
-    do_classic_experiments = True
-    do_gaussian_sr_experiments = False
+    do_classic_experiments = False
+    do_gaussian_sr_experiments = True
     default_run_args = [
         "python3 -u trainer_3d.py",
         "default" if isinstance(cfg.strategy, DefaultStrategy) else "mcmc",
