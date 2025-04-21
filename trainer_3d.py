@@ -704,7 +704,7 @@ class Runner:
                     min_step = int(
                         max(
                             self.cfg.min_noise_step,
-                            self.cfg.max_noise_step
+                            (self.cfg.max_noise_step - 1)
                             - step / self.cfg.noise_step_annealing,
                         )
                     )
