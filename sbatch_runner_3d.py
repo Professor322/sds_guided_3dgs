@@ -63,14 +63,15 @@ def sds_experiments_3d(cfg: Config3D, default_run_args: List[str]):
     if cfg.gaussian_sr:
         current_run_args.append("--gaussian-sr")
         result_dir += "_gaussian_sr"
-        if cfg.noise_scheduler_type != "none":
-            current_run_args.append(
-                f"--noise-scheduler-type {cfg.noise_scheduler_type}"
-            )
-            result_dir += f"_noise_scheduler_{cfg.noise_scheduler_type}"
         if cfg.sds_loss_type != "none":
             current_run_args.append(f"--sds-loss-type {cfg.sds_loss_type}")
             result_dir += f"_{cfg.sds_loss_type}"
+            # noise scheduling only makes sense when sds loss is enabled
+            if cfg.noise_scheduler_type != "none":
+                current_run_args.append(
+                    f"--noise-scheduler-type {cfg.noise_scheduler_type}"
+                )
+                result_dir += f"_noise_scheduler_{cfg.noise_scheduler_type}"
         if cfg.scale_factor > 0.0:
             current_run_args.append(f"--scale-factor {cfg.scale_factor}")
             result_dir += f"_scale_factor_{cfg.scale_factor}"

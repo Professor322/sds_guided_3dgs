@@ -254,7 +254,7 @@ class Runner:
             world_rank=world_rank,
             world_size=world_size,
         )
-        print("Model initialized. Number of GS:", len(self.splats["means"]))
+
         if self.cfg.gaussian_sr:
             if self.cfg.scale_factor <= 0.0:
                 raise ValueError("Set scale factor to use gaussian SR")
@@ -311,6 +311,8 @@ class Runner:
                 self.noise_scheduler = set_linear_noise_schedule(
                     self.cfg.max_steps, self.cfg.min_noise_step, self.cfg.max_noise_step
                 )
+
+        print("Model initialized. Number of GS:", len(self.splats["means"]))
 
         # Densification Strategy
         # recreate with dropout
