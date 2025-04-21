@@ -525,7 +525,7 @@ class Runner:
             self.trainset,
             batch_size=cfg.batch_size,
             shuffle=True,
-            num_workers=4,
+            num_workers=1,
             persistent_workers=True,
             pin_memory=True,
         )

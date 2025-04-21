@@ -76,6 +76,13 @@ def sds_experiments_3d(cfg: Config3D, default_run_args: List[str]):
             result_dir += f"_scale_factor_{cfg.scale_factor}"
         if checkpoint_path != "":
             current_run_args.append(f"--ckpt {checkpoint_path}")
+        if cfg.densification_dropout > 0.0:
+            current_run_args.append(
+                f"--densification-dropout {cfg.densification_dropout}"
+            )
+            result_dir += (
+                f"_dens_dropout_{str(cfg.densification_dropout).replace('.', '_')}"
+            )
 
     current_run_args.append(f"--result-dir {result_dir}")
     file_content = (
