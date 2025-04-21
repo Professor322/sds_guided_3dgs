@@ -58,13 +58,16 @@ def classic_splats_with_validation_3d(cfg: Config3D, default_run_args: List[str]
     )
     if cfg.upscale_suffix != "":
         # means we need to do a validation of resulting checkpoint on the real "data factor" images
-        checkpoint_path = f"{result_dir}/ckpts/ckpt_29999_rank0.pt"
-        current_run_args = default_run_args.copy()
-        current_run_args.append(f"--data-factor {cfg.data_factor}")
-        current_run_args.append(f"--result-dir {result_dir}")
-        current_run_args.append(f"--ckpt {checkpoint_path}")
-        current_run_args.append(f"--densification-dropout {cfg.densification_dropout}")
-        file_content += "\n" + "srun " + " ".join(current_run_args)
+        for checkpoint_num in cfg.save_steps:
+            checkpoint_path = f"{result_dir}/ckpts/ckpt_{checkpoint_num - 1}_rank0.pt"
+            current_run_args = default_run_args.copy()
+            current_run_args.append(f"--data-factor {cfg.data_factor}")
+            current_run_args.append(f"--result-dir {result_dir}")
+            current_run_args.append(f"--ckpt {checkpoint_path}")
+            current_run_args.append(
+                f"--densification-dropout {cfg.densification_dropout}"
+            )
+            file_content += "\n" + "srun " + " ".join(current_run_args)
 
     if DEBUG:
         print(file_content)
@@ -168,8 +171,8 @@ def main(
         psnrs_to_dirs = []
         result_dirs = glob.glob("./results_3d*")
         for result_dir in result_dirs:
-            for checkpoint in [6999, 29999]:
-                filename = f"{result_dir}/stats/val_step{checkpoint}.json"
+            for checkpoint in cfg.eval_steps:
+                filename = f"{result_dir}/stats/val_step{checkpoint - 1}.json"
                 if not os.path.exists(filename):
                     continue
                 with open(
