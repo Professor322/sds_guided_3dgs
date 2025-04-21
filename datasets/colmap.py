@@ -35,6 +35,7 @@ class Parser:
         factor: int = 1,
         normalize: bool = False,
         test_every: int = 8,
+        upscale_suffix: str = "",
     ):
         self.data_dir = data_dir
         self.factor = factor
@@ -151,6 +152,8 @@ class Parser:
         # Load images.
         if factor > 1 and not self.extconf["no_factor_suffix"]:
             image_dir_suffix = f"_{factor}"
+            if upscale_suffix != "":
+                image_dir_suffix += f"_{upscale_suffix}"
         else:
             image_dir_suffix = ""
         colmap_image_dir = os.path.join(data_dir, "images")

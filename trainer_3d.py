@@ -234,6 +234,7 @@ class Runner:
             factor=cfg.data_factor,
             normalize=cfg.normalize_world_space,
             test_every=cfg.test_every,
+            upscale_suffix=cfg.upscale_suffix,
         )
         self.val_parser = self.parser
 
@@ -310,6 +311,7 @@ class Runner:
                 factor=int(cfg.data_factor // cfg.scale_factor),
                 normalize=cfg.normalize_world_space,
                 test_every=cfg.test_every,
+                upscale_suffix=cfg.upscale_suffix,
             )
             self.valset = Dataset(self.val_parser, split="val")
             # initialize SDS loss

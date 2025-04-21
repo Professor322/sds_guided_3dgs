@@ -1,4 +1,4 @@
-from typing import List, Optional, Tuple, Union
+from typing import List
 from configs import Config3D, DefaultStrategy, MCMCStrategy
 import tyro
 import os
@@ -29,10 +29,18 @@ SBATCH_FILENAME = "3d_training_generated.sbatch"
 
 
 def classic_splats_with_validation_3d(cfg: Config3D, default_run_args: List[str]):
+    # upscale from 64 by the factor of 4 -> 16_bicubic
+    cfg.upscale_suffix = "bicubic"
+    cfg.data_factor = 16
     current_run_args = default_run_args.copy()
     scene = cfg.data_dir.split(sep="/")[-1]
     result_dir = f"results_3d_classic_data_factor_{cfg.data_factor}_{scene}_max_steps_{cfg.max_steps}"
 
+    if cfg.upscale_suffix != "":
+        current_run_args.append(f"--upscale-suffix {cfg.upscale_suffix}")
+        result_dir += f"_{cfg.upscale_suffix}"
+
+    current_run_args.append(f"--data-factor {cfg.data_factor}")
     current_run_args.append(f"--result-dir {result_dir}")
 
     file_content = (
@@ -50,10 +58,11 @@ def classic_splats_with_validation_3d(cfg: Config3D, default_run_args: List[str]
 
 def sds_experiments_3d(cfg: Config3D, default_run_args: List[str]):
     cfg.gaussian_sr = True
-    cfg.sds_loss_type = "sdi"
+    cfg.sds_loss_type = "none"
     cfg.noise_scheduler_type = "annealing"
     cfg.scale_factor = 4
     cfg.loss_type = "l2loss"
+    cfg.data_factor = 64
 
     current_run_args = default_run_args.copy()
     scene = cfg.data_dir.split(sep="/")[-1]
@@ -89,6 +98,7 @@ def sds_experiments_3d(cfg: Config3D, default_run_args: List[str]):
             current_run_args.append(f"--loss-type {cfg.loss_type}")
             result_dir += f"_{cfg.loss_type}"
 
+    current_run_args.append(f"--data-factor {cfg.data_factor}")
     current_run_args.append(f"--result-dir {result_dir}")
     file_content = (
         SBATCH_TEMPLATE + "\n" + f"echo '{result_dir}'\n" + " ".join(current_run_args)
@@ -110,12 +120,11 @@ def main(
     cfg.data_dir = "data/360_v2/bicycle"
     cfg.disable_viewer = True
 
-    do_classic_experiments = False
-    do_gaussian_sr_experiments = True
+    do_classic_experiments = True
+    do_gaussian_sr_experiments = False
     default_run_args = [
         "python3 -u trainer_3d.py",
         "default" if isinstance(cfg.strategy, DefaultStrategy) else "mcmc",
-        f"--data-factor {cfg.data_factor}",
         f"--data-dir {cfg.data_dir}",
         f"--disable-viewer" if cfg.disable_viewer else "",
     ]

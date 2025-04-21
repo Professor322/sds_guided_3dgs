@@ -154,6 +154,8 @@ class Config3D:
     # general loss type, gaussian sr uses l2 loss in their paper
     # without any D-SSIM coefficients
     loss_type: Literal["l2loss", "l1loss"] = "l1loss"
+    # upscale suffix for validation and training
+    upscale_suffix: Literal["bilinear", "bicubic", "sr", ""] = ""
 
     def adjust_steps(self, factor: float):
         self.eval_steps = [int(i * factor) for i in self.eval_steps]
@@ -237,3 +239,13 @@ class Config2D:
     ssim_lambda: float = 0.2
     use_mae_loss: bool = False
     densification_dropout: float = 0.0
+
+
+@dataclass
+class DatasetAugmentationConfig:
+    data_dir: str = "./data/360_v2/my_bicycle"
+    data_factor: int = 4
+    upscale_type: Literal["bilinear", "bicubic", "sr"] = "bicubic"
+    scale_factor: int = 4
+    prompt: str = ""
+    condtion_noise_level_steps: int = 50
