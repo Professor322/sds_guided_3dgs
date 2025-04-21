@@ -188,6 +188,18 @@ def create_splats_with_optimizers(
     return splats, optimizers
 
 
+# Calculate gradient norm from optimizer's parameters
+def calculate_grad_norm(optimizers: Dict):
+    total_norm = 0.0
+    for optimizer in optimizers.values():
+        for param_group in optimizer.param_groups:
+            for param in param_group["params"]:
+                if param.grad is not None:  # Check if gradient exists
+                    param_norm = param.grad.norm(2)  # L2 norm of the gradient
+                    total_norm += param_norm.item() ** 2
+    return total_norm**0.5  # Return the overall gradient norm
+
+
 class Runner:
     """Engine for training and testing."""
 
@@ -725,11 +737,13 @@ class Runner:
 
             if world_rank == 0 and cfg.tb_every > 0 and step % cfg.tb_every == 0:
                 mem = torch.cuda.max_memory_allocated() / 1024**3
+                grad_norm = calculate_grad_norm(self.optimizers)
                 self.writer.add_scalar("train/loss", loss.item(), step)
                 self.writer.add_scalar("train/l1loss", l1loss.item(), step)
                 self.writer.add_scalar("train/ssimloss", ssimloss.item(), step)
                 self.writer.add_scalar("train/num_GS", len(self.splats["means"]), step)
                 self.writer.add_scalar("train/mem", mem, step)
+                self.writer.add_scalar("train/grad_norm", grad_norm, step)
                 if cfg.depth_loss:
                     self.writer.add_scalar("train/depthloss", depthloss.item(), step)
                 if cfg.use_bilateral_grid:
