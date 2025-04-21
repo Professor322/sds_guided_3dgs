@@ -108,7 +108,7 @@ def main(
     do_classic_experiments = False
     do_gaussian_sr_experiments = True
     default_run_args = [
-        "python3 trainer_3d.py",
+        "python3 -u trainer_3d.py",
         "default" if isinstance(cfg.strategy, DefaultStrategy) else "mcmc",
         f"--data-factor {cfg.data_factor}",
         f"--data-dir {cfg.data_dir}",
