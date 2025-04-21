@@ -690,8 +690,8 @@ class Runner:
 
                 sds_loss = (
                     self.sds_loss(
-                        images=upscaled_colors,
-                        original=pixels,
+                        images=upscaled_colors.permute(0, 3, 1, 2),
+                        original=pixels.permute(0, 3, 1, 2),
                         min_step=min_step,
                         max_step=max_step,
                         lowres_noise_level=self.cfg.condition_noise,
