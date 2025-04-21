@@ -37,6 +37,9 @@ def classic_splats_with_validation_3d(cfg: Config3D, default_run_args: List[str]
     scene = cfg.data_dir.split(sep="/")[-1]
     result_dir = f"results_3d_classic_data_factor_{cfg.data_factor}_{scene}_max_steps_{cfg.max_steps}"
 
+    if isinstance(cfg.strategy, MCMCStrategy):
+        result_dir += "_mcmc"
+
     if cfg.upscale_suffix != "":
         current_run_args.append(f"--upscale-suffix {cfg.upscale_suffix}")
         result_dir += f"_{cfg.upscale_suffix}"
@@ -98,9 +101,12 @@ def sds_experiments_3d(cfg: Config3D, default_run_args: List[str]):
     checkpoint_path += "/ckpts/ckpt_29999_rank0.pt"
     result_dir = f"results_3d_classic_data_factor_{cfg.data_factor}_{scene}_max_steps_{cfg.max_steps}"
 
+    if isinstance(cfg.strategy, MCMCStrategy):
+        result_dir += "_mcmc"
+
     current_run_args.append(f"--densification-dropout {cfg.densification_dropout}")
 
-    cfg.max_steps = 15_000
+    cfg.max_steps = 30_000
     current_run_args.append(f"--max-steps {cfg.max_steps}")
     if cfg.gaussian_sr:
         current_run_args.append("--gaussian-sr")
@@ -153,6 +159,7 @@ def main(
     cfg.data_factor = 64
     cfg.data_dir = "data/360_v2/bicycle"
     cfg.disable_viewer = True
+    cfg.strategy = MCMCStrategy()
 
     do_classic_experiments = False
     do_gaussian_sr_experiments = True
