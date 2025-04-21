@@ -53,6 +53,7 @@ def sds_experiments_3d(cfg: Config3D, default_run_args: List[str]):
     cfg.sds_loss_type = "sdi"
     cfg.noise_scheduler_type = "annealing"
     cfg.scale_factor = 4
+    cfg.loss_type = "l2loss"
 
     current_run_args = default_run_args.copy()
     scene = cfg.data_dir.split(sep="/")[-1]
@@ -84,6 +85,9 @@ def sds_experiments_3d(cfg: Config3D, default_run_args: List[str]):
             result_dir += (
                 f"_dens_dropout_{str(cfg.densification_dropout).replace('.', '_')}"
             )
+        if cfg.loss_type == "l2loss":
+            current_run_args.append(f"--loss-type {cfg.loss_type}")
+            result_dir += f"_{cfg.loss_type}"
 
     current_run_args.append(f"--result-dir {result_dir}")
     file_content = (

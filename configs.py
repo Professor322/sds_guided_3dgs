@@ -140,7 +140,7 @@ class Config3D:
     min_noise_step: int = 20
     # maximum noise step for forward diffusion process
     max_noise_step: int = 980
-    # amount of noise applied on the low resolution condition image
+    # amount of noise applied to the low resolution condition image
     condition_noise: float = 0.0
     # type of noise scheduling for forward diffusion process
     noise_scheduler_type: Literal["collapsing", "linear", "annealing", "none"] = "none"
@@ -151,6 +151,9 @@ class Config3D:
     # dropout of splats during densification process
     # applicable right now only to default strategy
     densification_dropout: float = 0.7
+    # general loss type, gaussian sr uses l2 loss in their paper
+    # without any D-SSIM coefficients
+    loss_type: Literal["l2loss", "l1loss"] = "l1loss"
 
     def adjust_steps(self, factor: float):
         self.eval_steps = [int(i * factor) for i in self.eval_steps]
