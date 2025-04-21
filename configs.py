@@ -44,7 +44,9 @@ class Config3D:
     # Number of training steps
     max_steps: int = 30_000
     # Steps to evaluate the model
-    eval_steps: List[int] = field(default_factory=lambda: [3_000, 7_000, 30_000])
+    eval_steps: List[int] = field(
+        default_factory=lambda: [3_000, 7_000, 10_000, 15_000, 30_000]
+    )
     # Steps to save the model
     save_steps: List[int] = field(default_factory=lambda: [3_000, 7_000, 30_000])
 
