@@ -148,6 +148,9 @@ class Config3D:
     guidance_scale: float = 10.0
     # annealing coefficient for "annealing" type of noise scheduler
     noise_step_annealing: int = 100
+    # dropout of splats during densification process
+    # applicable right now only to default strategy
+    densification_dropout: float = 0.7
 
     def adjust_steps(self, factor: float):
         self.eval_steps = [int(i * factor) for i in self.eval_steps]

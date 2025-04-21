@@ -313,6 +313,11 @@ class Runner:
                 )
 
         # Densification Strategy
+        # recreate with dropout
+        if isinstance(self.cfg.strategy, DefaultStrategy):
+            self.cfg.strategy = DefaultStrategy(
+                verbose=True, dropout=self.cfg.densification_dropout
+            )
         self.cfg.strategy.check_sanity(self.splats, self.optimizers)
 
         if isinstance(self.cfg.strategy, DefaultStrategy):
