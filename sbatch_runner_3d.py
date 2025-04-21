@@ -50,8 +50,22 @@ def classic_splats_with_validation_3d(cfg: Config3D, default_run_args: List[str]
     current_run_args.append(f"--result-dir {result_dir}")
 
     file_content = (
-        SBATCH_TEMPLATE + "\n" + f"echo '{result_dir}'\n" + " ".join(current_run_args)
+        SBATCH_TEMPLATE
+        + "\n"
+        + f"echo '{result_dir}'\n"
+        + "srun "
+        + " ".join(current_run_args)
     )
+    if cfg.upscale_suffix != "":
+        # means we need to do a validation of resulting checkpoint on the real "data factor" images
+        checkpoint_path = f"{result_dir}/ckpts/ckpt_29999_rank0.pt"
+        current_run_args = default_run_args.copy()
+        current_run_args.append(f"--data-factor {cfg.data_factor}")
+        current_run_args.append(f"--result-dir {result_dir}")
+        current_run_args.append(f"--ckpt {checkpoint_path}")
+        current_run_args.append(f"--densification-dropout {cfg.densification_dropout}")
+        file_content += "\n" + "srun " + " ".join(current_run_args)
+
     if DEBUG:
         print(file_content)
     with open(SBATCH_FILENAME, "w") as file:
