@@ -32,6 +32,7 @@ def classic_splats_with_validation_3d(cfg: Config3D, default_run_args: List[str]
     # upscale from 64 by the factor of 4 -> 16_bicubic
     cfg.upscale_suffix = "bicubic"
     cfg.data_factor = 16
+    cfg.densification_dropout = 0.0
     current_run_args = default_run_args.copy()
     scene = cfg.data_dir.split(sep="/")[-1]
     result_dir = f"results_3d_classic_data_factor_{cfg.data_factor}_{scene}_max_steps_{cfg.max_steps}"
@@ -41,6 +42,11 @@ def classic_splats_with_validation_3d(cfg: Config3D, default_run_args: List[str]
         result_dir += f"_{cfg.upscale_suffix}"
 
     current_run_args.append(f"--data-factor {cfg.data_factor}")
+    current_run_args.append(f"--densification-dropout {cfg.densification_dropout}")
+    if cfg.densification_dropout > 0.0:
+        result_dir += (
+            f"_dens_dropout_{str(cfg.densification_dropout).replace('.', '_')}"
+        )
     current_run_args.append(f"--result-dir {result_dir}")
 
     file_content = (
@@ -58,11 +64,14 @@ def classic_splats_with_validation_3d(cfg: Config3D, default_run_args: List[str]
 
 def sds_experiments_3d(cfg: Config3D, default_run_args: List[str]):
     cfg.gaussian_sr = True
-    cfg.sds_loss_type = "none"
+    cfg.sds_loss_type = "sdi"
     cfg.noise_scheduler_type = "annealing"
     cfg.scale_factor = 4
     cfg.loss_type = "l2loss"
     cfg.data_factor = 64
+
+    if cfg.sds_loss_type == "none":
+        cfg.densification_dropout = 0.0
 
     current_run_args = default_run_args.copy()
     scene = cfg.data_dir.split(sep="/")[-1]
@@ -70,6 +79,7 @@ def sds_experiments_3d(cfg: Config3D, default_run_args: List[str]):
     checkpoint_path += "/ckpts/ckpt_29999_rank0.pt"
     result_dir = f"results_3d_classic_data_factor_{cfg.data_factor}_{scene}_max_steps_{cfg.max_steps}"
 
+    current_run_args.append(f"--densification-dropout {cfg.densification_dropout}")
     if cfg.gaussian_sr:
         current_run_args.append("--gaussian-sr")
         result_dir += "_gaussian_sr"
@@ -88,9 +98,6 @@ def sds_experiments_3d(cfg: Config3D, default_run_args: List[str]):
         if checkpoint_path != "":
             current_run_args.append(f"--ckpt {checkpoint_path}")
         if cfg.densification_dropout > 0.0:
-            current_run_args.append(
-                f"--densification-dropout {cfg.densification_dropout}"
-            )
             result_dir += (
                 f"_dens_dropout_{str(cfg.densification_dropout).replace('.', '_')}"
             )
