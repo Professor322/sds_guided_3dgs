@@ -166,19 +166,20 @@ def main(
     if TOP_PSNRS:
         print("Getting psnrs...")
         psnrs_to_dirs = []
-        result_dirs = glob.glob("/home/nskochetkov/sds_guided_3dgs/results_3d_low*")
+        result_dirs = glob.glob("./results_3d*")
         for result_dir in result_dirs:
-            filename = f"{result_dir}/stats/step999.json"
-            if not os.path.exists(filename):
-                continue
-            with open(
-                filename,
-                "r",
-            ) as file:
-                # mitigation, as I messed up json format
-                data = file.read().split("}")[0] + "}"
-                results = json.loads(data)
-                psnrs_to_dirs.append((results["psnr"], result_dir))
+            for checkpoint in [6999, 29999]:
+                filename = f"{result_dir}/stats/val_step{checkpoint}.json"
+                if not os.path.exists(filename):
+                    continue
+                with open(
+                    filename,
+                    "r",
+                ) as file:
+                    # mitigation, as I messed up json format
+                    data = file.read()
+                    results = json.loads(data)
+                    psnrs_to_dirs.append((results["psnr"], result_dir, checkpoint))
 
         psnrs_to_dirs = sorted(psnrs_to_dirs, reverse=True)
         for psnr_to_dir in psnrs_to_dirs:
