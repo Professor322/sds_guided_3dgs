@@ -297,7 +297,9 @@ def main(
     if do_classic_experiments:
         result_dirs += classic_splats_with_validation_2d(cfg)
 
-    result_dirs = glob.glob("/home/nskochetkov/sds_guided_3dgs/results_2d_low*")
+    result_dirs = glob.glob(
+        "/home/nskochetkov/sds_guided_3dgs/results_2d/results_2d_low*"
+    )
     if GET_PLOTS:
         print("Getting plots...")
         for result_dir in result_dirs:
@@ -308,7 +310,6 @@ def main(
     if TOP_PSNRS:
         print("Getting psnrs...")
         psnrs_to_dirs = []
-        result_dirs = glob.glob("/home/nskochetkov/sds_guided_3dgs/results_2d_low*")
         for result_dir in result_dirs:
             filename = f"{result_dir}/stats/step999.json"
             if not os.path.exists(filename):

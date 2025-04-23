@@ -329,11 +329,14 @@ class Runner:
         print("Model initialized. Number of GS:", len(self.splats["means"]))
 
         # Densification Strategy
-        # recreate with dropout
         if isinstance(self.cfg.strategy, DefaultStrategy):
+            # recreate with dropout
             self.cfg.strategy = DefaultStrategy(
                 verbose=True, dropout=self.cfg.densification_dropout
             )
+        elif isinstance(self.cfg.strategy, MCMCStrategy):
+            # recreate with limitation on the splat number
+            self.cfg.strategy = MCMCStrategy(verbose=True, cap_max=self.cfg.max_splats)
         self.cfg.strategy.check_sanity(self.splats, self.optimizers)
 
         if isinstance(self.cfg.strategy, DefaultStrategy):

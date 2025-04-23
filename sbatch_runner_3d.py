@@ -89,6 +89,7 @@ def sds_experiments_3d(cfg: Config3D, default_run_args: List[str]):
     cfg.scale_factor = 4
     cfg.loss_type = "l1loss"
     cfg.data_factor = 64
+    cfg.max_splats = 2_000_000
     # cfg.min_noise_step = 10
     # cfg.max_noise_step = 50
 
@@ -103,6 +104,8 @@ def sds_experiments_3d(cfg: Config3D, default_run_args: List[str]):
 
     if isinstance(cfg.strategy, MCMCStrategy):
         result_dir += "_mcmc"
+        result_dir += f"_max_splats{cfg.max_splats}"
+        current_run_args.append(f"--max-splats {cfg.max_splats}")
 
     current_run_args.append(f"--densification-dropout {cfg.densification_dropout}")
 

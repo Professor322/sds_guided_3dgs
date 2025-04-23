@@ -158,6 +158,8 @@ class Config3D:
     loss_type: Literal["l2loss", "l1loss"] = "l1loss"
     # upscale suffix for validation and training
     upscale_suffix: Literal["bilinear", "bicubic", "sr", ""] = ""
+    # maximum allowed number of splats
+    max_splats: int = 1_000_000
 
     def adjust_steps(self, factor: float):
         self.eval_steps = [int(i * factor) for i in self.eval_steps]

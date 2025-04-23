@@ -171,7 +171,7 @@ class SimpleTrainer:
         elif self.cfg.model_type == "2dgs":
             self.rasterize_fnc = rasterization_2dgs
 
-    def rasterize_splats(self, i) -> Tuple[Tensor, Tensor, Dict]:
+    def rasterize_splats(self) -> Tuple[Tensor, Tensor, Dict]:
         means = self.splats["means"]  # [N, 3]
         # quats = F.normalize(self.splats["quats"], dim=-1)  # [N, 4]
         # rasterization does normalization internally
@@ -347,7 +347,7 @@ class SimpleTrainer:
         pbar = tqdm.tqdm(range(begin, end))
         for i in pbar:
             start = time.time()
-            renders, _, info = self.rasterize_splats(i)
+            renders, _, info = self.rasterize_splats()
             if self.cfg.use_strategy:
                 self.cfg.strategy.step_pre_backward(
                     self.splats, self.optimizers, self.strategy_state, i, info
