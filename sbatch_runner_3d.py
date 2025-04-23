@@ -97,7 +97,7 @@ def sds_experiments_3d(cfg: Config3D, default_run_args: List[str]):
 
     current_run_args = default_run_args.copy()
     scene = cfg.data_dir.split(sep="/")[-1]
-    checkpoint_path = f"results_3d_classic_data_factor_{cfg.data_factor}_{scene}_max_steps_{cfg.max_steps}"
+    checkpoint_path = f"results_3d_classic_data_factor_{cfg.data_factor}_{scene}_max_steps_{cfg.max_steps}_mcmc"
     checkpoint_path += "/ckpts/ckpt_29999_rank0.pt"
     result_dir = f"results_3d_classic_data_factor_{cfg.data_factor}_{scene}_max_steps_{cfg.max_steps}"
 
@@ -123,14 +123,16 @@ def sds_experiments_3d(cfg: Config3D, default_run_args: List[str]):
 
             # current_run_args.append(f"--min-noise-step {cfg.min_noise_step}")
             # current_run_args.append(f"--max-noise-step {cfg.max_noise_step}")
-            # result_dir += f"_min_step_{cfg.min_noise_step}_max_step_{cfg.min_noise_step}"
+            # result_dir += f"_min_step_{cfg.min_noise_step}_max_step_{cfg.max_noise_step}"
 
         if cfg.scale_factor > 0.0:
             current_run_args.append(f"--scale-factor {cfg.scale_factor}")
             result_dir += f"_scale_factor_{cfg.scale_factor}"
         if checkpoint_path != "":
             current_run_args.append(f"--ckpt {checkpoint_path}")
-        if cfg.densification_dropout > 0.0:
+        if cfg.densification_dropout > 0.0 and not isinstance(
+            cfg.strategy, MCMCStrategy
+        ):
             result_dir += (
                 f"_dens_dropout_{str(cfg.densification_dropout).replace('.', '_')}"
             )
