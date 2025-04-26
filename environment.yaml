@@ -106,7 +106,6 @@ dependencies:
       - diffusers==0.33.1
       - docstring-parser==0.16
       - einops==0.8.1
-      - embreex==2.17.7.post5
       - exceptiongroup==1.2.2
       - filelock==3.16.1
       - fonttools==4.55.3
