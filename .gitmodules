@@ -1,3 +1,3 @@
 [submodule "StableSR"]
 	path = StableSR
-	url = git@github.com:IceClear/StableSR.git
+	url = https://github.com/IceClear/StableSR.git
