@@ -116,14 +116,11 @@ dependencies:
       - diffusers==0.33.1
       - docstring-parser==0.16
       - einops==0.8.1
-      - embreex==2.17.7.post6
       - exceptiongroup==1.2.2
       - fonttools==4.57.0
       - frozenlist==1.6.0
       - ftfy==6.3.1
-      - fused-ssim==0.0.0
       - grpcio==1.71.0
-      - gsplat==1.5.1+pt24cu124
       - h11==0.16.0
       - httpcore==1.0.9
       - httpx==0.28.1
@@ -159,7 +156,6 @@ dependencies:
       - protobuf==6.30.2
       - psutil==7.0.0
       - pycollada==0.9
-      - pycolmap==0.0.1
       - pygments==2.19.1
       - pyparsing==3.2.3
       - python-dateutil==2.9.0.post0
@@ -185,7 +181,6 @@ dependencies:
       - tifffile==2025.3.30
       - torchmetrics==1.7.1
       - tqdm==4.67.1
-      - trimesh==4.6.8
       - typeguard==4.4.2
       - typing-extensions==4.13.2
       - tyro==0.9.19
@@ -199,4 +194,3 @@ dependencies:
       - yarl==1.20.0
       - yourdfpy==0.0.57
       - zipp==3.21.0
-prefix: /home/kolek/miniconda3/envs/sds_splats
