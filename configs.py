@@ -243,6 +243,12 @@ class Config2D:
     ssim_lambda: float = 0.2
     use_mae_loss: bool = False
     densification_dropout: float = 0.0
+    # stableSR parameters
+    use_stable_sr_sds: bool = False
+    stable_sr_config_path: str = (
+        "StableSR/configs/stableSRNew/v2-finetune_text_T_512.yaml"
+    )
+    stable_sr_checkpoint_path: str = "StableSR/stablesr_000117.ckpt"
 
 
 @dataclass
