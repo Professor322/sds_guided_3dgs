@@ -436,8 +436,8 @@ class SimpleTrainer:
             if cfg.use_stable_sr_sds:
                 sds = (
                     self.sds_loss(
-                        render=out_img,
-                        condition=self.dataloader.dataset.img,
+                        render=out_img.permute(2, 0, 1).unsqueeze(0),
+                        condition=self.dataloader.dataset.img.unsqueeze(0),
                         min_noise_step=self.cfg.min_noise_step,
                         max_noise_step=self.cfg.max_noise_step,
                     )
@@ -453,7 +453,7 @@ class SimpleTrainer:
                 # calculate SDS
                 # downscale rendering into 256x256->64x64 and calculate MSE
                 # final loss MSE + lmbd * SDS (how to do it properly?)
-                resolution = (64, 64)
+                resolution = (self.cfg.width, self.cfg.height)
                 downscaled_render = F.interpolate(
                     out_img.permute(2, 0, 1).unsqueeze(0),
                     resolution,

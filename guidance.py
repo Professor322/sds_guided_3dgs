@@ -30,7 +30,6 @@ class SDSLoss3DGS_StableSR(nn.Module):
         self.model = load_model_from_config(model_config, model_checkpoint_path)
 
         self.model.configs = model_config
-        self.model = self.model.to(self.device)
 
         self.model.register_schedule(
             given_betas=None,
@@ -40,6 +39,9 @@ class SDSLoss3DGS_StableSR(nn.Module):
             linear_end=0.0120,
             cosine_s=8e-3,
         )
+        self.model = self.model.to(self.device)
+        self.tile_size = 64
+        self.tile_overlap = 32
 
         # vqgan_config = OmegaConf.load(vq_model_config_path)
         # self.vq_model = load_model_from_config(vqgan_config, vq_model_checkpoint_path)
@@ -62,7 +64,7 @@ class SDSLoss3DGS_StableSR(nn.Module):
         text_init = [""] * batch_size
         semantic_c = self.model.cond_stage_model(text_init)
 
-        noise = torch.randn_like(render_latent)
+        noise = torch.randn_like(render_latent, device=self.device)
 
         t = torch.randint(
             min_noise_step,
@@ -72,15 +74,18 @@ class SDSLoss3DGS_StableSR(nn.Module):
             device=self.device,
         )
         # apply noise to the render, this is our X_t here
-        noised_render_latent = self.q_sample(x_start=render_latent, t=t, noise=noise)
+        noised_render_latent = self.model.q_sample(
+            x_start=render_latent, t=t, noise=noise
+        )
         # upscale condition and encode it as well
-        width, height = render.size(1), render.size(2)
+        width, height = render.size(2), render.size(3)
         condition_upscaled = F.interpolate(condition, (width, height), mode="bicubic")
         condition_upscaled_latent = self.model.get_first_stage_encoding(
             self.model.encode_first_stage(condition_upscaled)
         )
 
         # p_sample_canvas has torch.no_grad() inside, no need to have it here
+        tile_weights = self.model._gaussian_weights(self.tile_size, self.tile_size, 1)
         _, denoised_render_latent = self.model.p_sample_canvas(
             x=noised_render_latent,
             c=semantic_c,
@@ -88,7 +93,12 @@ class SDSLoss3DGS_StableSR(nn.Module):
             t=t,
             clip_denoised=True,
             return_x0=True,
+            tile_size=self.tile_size,
+            tile_weights=tile_weights,
+            tile_overlap=self.tile_overlap,
+            batch_size=batch_size,
         )
+
         w = self.model.sqrt_one_minus_alphas_cumprod[t].view(-1, 1, 1, 1)
         loss_sds = (
             0.5
