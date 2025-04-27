@@ -27,6 +27,7 @@ source activate gsplat_sds
 
 nvidia-smi
 echo "starting 2d training"
+export PYTHONPATH=$PYTHONPATH:/home/nskochetkov/sds_guided_3dgs/StableSR
 """
 
 SBATCH_FILENAME = "2d_training_generated.sbatch"
