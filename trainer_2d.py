@@ -23,7 +23,7 @@ import os
 from IPython.display import display, clear_output
 import torch.nn.functional as F
 from diffusers import DiffusionPipeline
-from guidance import SDSLoss3DGS, SDILoss3DGS
+from guidance import SDSLoss3DGS, SDILoss3DGS, SDSLoss3DGS_StableSR
 from torch.utils.data import Dataset, DataLoader
 import torchvision.transforms as transforms
 import torchvision.transforms.functional as VF
@@ -151,6 +151,12 @@ class SimpleTrainer:
         self.dataloader = DataLoader(
             self.one_image_dataset, batch_size=cfg.batch_size, num_workers=0
         )
+        if self.cfg.use_stable_sr_sds:
+            self.sds_loss = SDSLoss3DGS_StableSR(
+                model_checkpoint_path=self.cfg.stable_sr_checkpoint_path,
+                model_config_path=self.cfg.stable_sr_config_path,
+            )
+
         self.mse_loss = torch.nn.MSELoss()
         self.mae_loss = torch.nn.L1Loss()
         if self.cfg.use_noise_scheduler:
@@ -427,6 +433,18 @@ class SimpleTrainer:
                     )
                     * self.cfg.lmbd
                 )
+            if cfg.use_stable_sr_sds:
+                sds = (
+                    self.sds_loss(
+                        render=out_img,
+                        condition=self.dataloader.dataset.img,
+                        min_noise_step=self.cfg.min_noise_step,
+                        max_noise_step=self.cfg.max_noise_step,
+                    )
+                    * self.cfg.lmbd
+                )
+                sds = sds.squeeze()
+
             if cfg.use_gaussian_sr:
                 # do not use base renders anymore
                 # render image in HR 256x256

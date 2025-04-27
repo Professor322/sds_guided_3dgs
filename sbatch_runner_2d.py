@@ -149,9 +149,7 @@ def sds_experiments_2d(cfg: Config2D, default_run_args):
                         for prompt in prompts:
                             for guidance_scale in guidance_scales:
                                 current_run_args = default_run_args.copy()
-                                checkpoint_path = (
-                                    f"results_2d_classic_{cfg.width}x{cfg.height}"
-                                )
+                                checkpoint_path = f"results_2d/results_2d_classic_{cfg.width}x{cfg.height}"
                                 checkpoint_path += f"_original_num_points_{num_point}/ckpts/ckpt_{checkpoint}.pt"
                                 current_run_args.append(
                                     f"--ckpt-path {checkpoint_path}"
@@ -226,6 +224,9 @@ def sds_experiments_2d(cfg: Config2D, default_run_args):
                                     current_run_args.append(
                                         f"--densification-dropout {cfg.densification_dropout}"
                                     )
+                                if cfg.use_stable_sr_sds:
+                                    result_dir += "_stable_sr_sds"
+                                    current_run_args.append("--use-stable-sr-sds")
 
                                 result_dir += f"_num_points_{num_point}"
                                 current_run_args.append(f"--num-points {num_point}")
@@ -273,14 +274,15 @@ def main(
     # cfg.use_fused_loss = True
     # cfg.use_downscaled_mse_loss = True
     cfg.use_strategy = True
-    cfg.noise_step_anealing = 100
+    # cfg.noise_step_anealing = 100
     # cfg.use_ssim_loss = True
     # cfg.use_altering_loss = True
     # cfg.collapsing_noise_scheduler = True
     # cfg.use_lr_scheduler = True
     # from paper
-    cfg.densification_dropout = 0.7
-    cfg.use_sdi_loss = True
+    # cfg.densification_dropout = 0.7
+    # cfg.use_sdi_loss = True
+    cfg.use_stable_sr_sds = True
     do_sds_experiments = True
     do_classic_experiments = False
 

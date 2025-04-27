@@ -3,20 +3,35 @@ import torch.nn.functional as F
 from torch import nn
 
 from diffusers import DiffusionPipeline, StableDiffusionPipeline
+from omegaconf import OmegaConf
+from StableSR.scripts.sr_val_ddpm_text_T_vqganfin_oldcanvas import (
+    load_model_from_config,
+)
+from StableSR.ldm.models.diffusion.ddpm import LatentDiffusionSRTextWT
+from StableSR.ldm.models.autoencoder import AutoencoderKLResi
+from dataclasses import dataclass
 
-# from omegaconf import OmegaConf
 
-# TODO finish implementing StableSR
-class StableSRSDS(torch.nn.Module):
-    def __init__(self):
+@dataclass
+class SDSLoss3DGS_StableSR(nn.Module):
+    model: LatentDiffusionSRTextWT
+    # vq_model: AutoencoderKLResi
+
+    def __init__(
+        self,
+        model_config_path: str,
+        model_checkpoint_path: str,
+        vq_model_config_path: str = "",
+        vq_model_checkpoint_path: str = "",
+    ):
         super().__init__()
-        self.device = "cuda"
-        config = OmegaConf.load("configs/stableSRNew/v2-finetune_text_T_512.yaml")
-        self.model = load_model_from_config(config, "stablesr_000117.ckpt")
-        device = torch.device("cuda")
+        self.device = torch.device("cuda:0")
+        model_config = OmegaConf.load(model_config_path)
+        self.model = load_model_from_config(model_config, model_checkpoint_path)
 
-        self.model.configs = config
-        self.model = self.model.to(device)
+        self.model.configs = model_config
+        self.model = self.model.to(self.device)
+
         self.model.register_schedule(
             given_betas=None,
             beta_schedule="linear",
@@ -26,16 +41,62 @@ class StableSRSDS(torch.nn.Module):
             cosine_s=8e-3,
         )
 
-        self.model.num_timesteps = 1000
+        # vqgan_config = OmegaConf.load(vq_model_config_path)
+        # self.vq_model = load_model_from_config(vqgan_config, vq_model_checkpoint_path)
+        # self.vq_model.decoder.fusion_w = 0.5
+        # self.vq_model = self.vq_model.to(self.device)
 
-        vqgan_config = OmegaConf.load(
-            "configs/autoencoder/autoencoder_kl_64x64x4_resi.yaml"
+    def forward(
+        self,
+        render: torch.Tensor,
+        condition: torch.Tensor,
+        min_noise_step: int,
+        max_noise_step: int,
+    ):
+
+        batch_size = render.size(0)
+
+        render_latent = self.model.get_first_stage_encoding(
+            self.model.encode_first_stage(render)
         )
-        self.vq_model = load_model_from_config(vqgan_config, "vqgan_cfw_00011.ckpt")
-        self.vq_model = self.vq_model.to(device)
+        text_init = [""] * batch_size
+        semantic_c = self.model.cond_stage_model(text_init)
 
-    def forward(self, x):
-        pass
+        noise = torch.randn_like(render_latent)
+
+        t = torch.randint(
+            min_noise_step,
+            max_noise_step,
+            [batch_size],
+            dtype=torch.long,
+            device=self.device,
+        )
+        # apply noise to the render, this is our X_t here
+        noised_render_latent = self.q_sample(x_start=render_latent, t=t, noise=noise)
+        # upscale condition and encode it as well
+        width, height = render.size(1), render.size(2)
+        condition_upscaled = F.interpolate(condition, (width, height), mode="bicubic")
+        condition_upscaled_latent = self.model.get_first_stage_encoding(
+            self.model.encode_first_stage(condition_upscaled)
+        )
+
+        # p_sample_canvas has torch.no_grad() inside, no need to have it here
+        _, denoised_render_latent = self.model.p_sample_canvas(
+            x=noised_render_latent,
+            c=semantic_c,
+            struct_cond=condition_upscaled_latent,
+            t=t,
+            clip_denoised=True,
+            return_x0=True,
+        )
+        w = self.model.sqrt_one_minus_alphas_cumprod[t].view(-1, 1, 1, 1)
+        loss_sds = (
+            0.5
+            * w
+            * F.mse_loss(render_latent, denoised_render_latent, reduction="sum")
+            / batch_size
+        )
+        return loss_sds
 
 
 class SDSLoss3DGS(torch.nn.Module):
