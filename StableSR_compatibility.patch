@@ -24,3 +24,17 @@ index 4664826..9c01769 100644
 
  from ldm.util import log_txt_as_img, exists, default, ismap, isimage, mean_flat, count_params, instantiate_from_config
  from ldm.modules.ema import LitEma
+diff --git a/ldm/modules/encoders/modules.py b/ldm/modules/encoders/modules.py
+index d2ac91a..36eb19e 100644
+--- a/ldm/modules/encoders/modules.py
++++ b/ldm/modules/encoders/modules.py
+@@ -150,7 +150,9 @@ class FrozenOpenCLIPEmbedder(AbstractEncoder):
+                  freeze=True, layer="last"):
+         super().__init__()
+         assert layer in self.LAYERS
+-        model, _, _ = open_clip.create_model_and_transforms(arch, device=torch.device('cpu'), pretrained=version)
++        model, _, _ = open_clip.create_model_and_transforms(arch,
++                                                            device=torch.device('cpu'),
++                                                            pretrained="/home/nskochetkov/.cache/huggingface/hub/models--laion--CLIP-ViT-H-14-laion2B-s32B-b79K/blobs/9a78ef8e8c73fd0df621682e7a8e8eb36c6916cb3c16b291a082ecd52ab79cc4")
+         del model.visual
+         self.model = model
