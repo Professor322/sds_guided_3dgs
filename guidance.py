@@ -58,6 +58,10 @@ class SDSLoss3DGS_StableSR(nn.Module):
 
         batch_size = render.size(0)
 
+        # model works in [-1, 1] instead of [0, 1]
+        render = 2.0 * render - 1.0
+        condition = 2.0 * condition - 1.0
+
         render_latent = self.model.get_first_stage_encoding(
             self.model.encode_first_stage(render)
         )

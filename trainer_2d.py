@@ -469,7 +469,7 @@ class SimpleTrainer:
                     loss = self.mse_loss(
                         downscaled_render, self.dataloader.dataset.img.unsqueeze(0)
                     )
-                if cfg.use_sds_loss or cfg.use_sdi_loss:
+                if cfg.use_sds_loss or cfg.use_sdi_loss or cfg.use_stable_sr_sds:
                     loss += sds.squeeze()
                 if cfg.use_ssim_loss:
                     loss += cfg.ssim_lambda * (
