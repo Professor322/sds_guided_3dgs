@@ -79,7 +79,7 @@ def classic_splats_with_validation_2d(cfg: Config2D, default_run_args: List[str]
 
 
 def sds_experiments_2d(cfg: Config2D, default_run_args: List[str]):
-    checkpopint_num = 999
+    checkpopint_num = 29999
     cfg.num_points = 10_000
     cfg.use_gaussian_sr = True
     cfg.scale_factor = 2
@@ -88,10 +88,10 @@ def sds_experiments_2d(cfg: Config2D, default_run_args: List[str]):
     training_scale = 16
     validation_scale = training_scale // cfg.scale_factor
     cfg.validation_image_path = (
-        f"data/360_v2/bicycle/images_{training_scale}/_DSC8679.JPG"
+        f"data/360_v2/bicycle/images_{validation_scale}/_DSC8679.JPG"
     )
     cfg.training_image_path = (
-        f"data/360_v2/bicycle/images_{validation_scale}/_DSC8679.JPG"
+        f"data/360_v2/bicycle/images_{training_scale}/_DSC8679.JPG"
     )
 
     current_run_args = default_run_args.copy()
