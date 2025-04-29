@@ -5,7 +5,7 @@ import json
 import glob
 from typing import List
 
-DEBUG = True
+DEBUG = False
 GET_PLOTS = False
 TOP_PSNRS = False
 
