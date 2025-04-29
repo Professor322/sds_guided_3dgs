@@ -5,7 +5,7 @@ import json
 import glob
 from typing import List
 
-DEBUG = False
+DEBUG = True
 GET_PLOTS = False
 TOP_PSNRS = False
 
@@ -43,6 +43,7 @@ def classic_splats_with_validation_2d(cfg: Config2D, default_run_args: List[str]
     cfg.use_strategy = True
 
     current_run_args = default_run_args.copy()
+    current_run_args.append(f"--iterations {cfg.iterations}")
     current_run_args.append(f"--validation-image-path {cfg.validation_image_path}")
     current_run_args.append(f"--training-image-path {cfg.training_image_path}")
 
@@ -97,6 +98,7 @@ def sds_experiments_2d(cfg: Config2D, default_run_args: List[str]):
 
     current_run_args.append(f"--validation-image-path {cfg.validation_image_path}")
     current_run_args.append(f"--training-image-path {cfg.training_image_path}")
+    current_run_args.append(f"--iterations {cfg.iterations}")
 
     checkpoint_path = f"results_2d_classic"
     checkpoint_path += f"_num_points_{cfg.num_points}_{cfg.classic_loss_type}"
