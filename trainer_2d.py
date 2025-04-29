@@ -61,12 +61,11 @@ class SimpleTrainer:
         self.cfg = cfg
         if self.cfg.use_strategy:
             self.cfg.strategy = DefaultStrategy(
-                verbose=True, dropout=self.cfg.densification_dropout
+                verbose=True,  # dropout=self.cfg.densification_dropout
             )
             self.strategy_state = self.cfg.strategy.initialize_state()
         else:
             self.cfg.strategy = NotImplementedError
-        self.strategy_state = None
         self.device = torch.device("cuda:0")
         self.num_points = self.cfg.num_points
         self.training_img = process_image(
@@ -538,7 +537,14 @@ class SimpleTrainer:
                 Image.fromarray(frame).save(f"{self.render_dir}/image_{i}.png")
                 torch.save(to_save, f"{self.ckpt_dir}/ckpt_{i}.pt")
                 with open(f"{self.stats_dir}/step{i}.json", "w") as f:
-                    json.dump({"psnr": psnr.item(), "ssim": ssim.item()}, f)
+                    json.dump(
+                        {
+                            "psnr": psnr.item(),
+                            "ssim": ssim.item(),
+                            "num_splats": self.splats["means"].size(0),
+                        },
+                        f,
+                    )
 
             if i in [idx - 1 for idx in self.cfg.valiation_steps] or i == end - 1:
                 self.validate(i)
@@ -547,6 +553,7 @@ class SimpleTrainer:
         print(
             f"Per step(s):\nRasterization: {times[0]/self.cfg.iterations:.5f}, Backward: {times[1]/self.cfg.iterations:.5f}"
         )
+        print(f"Num splats: {self.splats['means'].size(0)}")
         if cfg.debug_training:
             for name, info in param_info.items():
                 print(

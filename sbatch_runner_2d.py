@@ -5,7 +5,7 @@ import json
 import glob
 from typing import List
 
-DEBUG = True
+DEBUG = False
 GET_PLOTS = False
 TOP_PSNRS = False
 
@@ -30,11 +30,17 @@ SBATCH_FILENAME = "2d_training_generated.sbatch"
 
 def classic_splats_with_validation_2d(cfg: Config2D, default_run_args: List[str]):
     result_dir = "results_2d_classic"
-    cfg.iterations = 1000
+    cfg.iterations = 30_000
     cfg.num_points = 10_000
     cfg.classic_loss_type = "l1loss"
-    cfg.validation_image_path = "data/360_v2/bicycle/images_8/_DSC8679.JPG"
-    cfg.training_image_path = "data/360_v2/bicycle/images_8/_DSC8679.JPG"
+    training_scale = 16
+    cfg.validation_image_path = (
+        f"data/360_v2/bicycle/images_{training_scale}/_DSC8679.JPG"
+    )
+    cfg.training_image_path = (
+        f"data/360_v2/bicycle/images_{training_scale}/_DSC8679.JPG"
+    )
+    cfg.use_strategy = True
 
     current_run_args = default_run_args.copy()
     current_run_args.append(f"--validation-image-path {cfg.validation_image_path}")
@@ -50,6 +56,11 @@ def classic_splats_with_validation_2d(cfg: Config2D, default_run_args: List[str]
         result_dir += f"_{cfg.width}x{cfg.height}"
     else:
         result_dir += "_original"
+
+    if cfg.use_strategy:
+        result_dir += "_strategy"
+        current_run_args.append(f"--use-strategy")
+    result_dir += f"_scale_{training_scale}"
 
     current_run_args.append(f"--results-dir {result_dir}")
 
@@ -73,8 +84,14 @@ def sds_experiments_2d(cfg: Config2D, default_run_args: List[str]):
     cfg.scale_factor = 2
     cfg.sds_loss_type = "none"
     cfg.classic_loss_type = "l1loss"
-    cfg.validation_image_path = "data/360_v2/bicycle/images_8/_DSC8679.JPG"
-    cfg.training_image_path = "data/360_v2/bicycle/images_8/_DSC8679.JPG"
+    training_scale = 16
+    validation_scale = training_scale // cfg.scale_factor
+    cfg.validation_image_path = (
+        f"data/360_v2/bicycle/images_{training_scale}/_DSC8679.JPG"
+    )
+    cfg.training_image_path = (
+        f"data/360_v2/bicycle/images_{validation_scale}/_DSC8679.JPG"
+    )
 
     current_run_args = default_run_args.copy()
 
@@ -87,9 +104,11 @@ def sds_experiments_2d(cfg: Config2D, default_run_args: List[str]):
         checkpoint_path += f"_{cfg.width}x{cfg.height}"
     else:
         checkpoint_path += "_original"
+    checkpoint_path += "_strategy"
+    checkpoint_path += f"_scale_{training_scale}"
     checkpoint_path += f"/ckpts/ckpt_{checkpopint_num}.pt"
     current_run_args.append(f"--ckpt-path {checkpoint_path}")
-    result_dir = f"results_2d_low_res_noise_level_{str(cfg.lowres_noise_level).replace('.', '_')}_"
+    result_dir = f"results_2d_low_res_noise_level_{str(cfg.lowres_noise_level).replace('.', '_')}"
     result_dir += f"_{checkpopint_num}_min{cfg.min_noise_step}_max{cfg.max_noise_step}"
     if cfg.use_gaussian_sr:
         result_dir += f"_gaussian_sr"
@@ -131,6 +150,7 @@ def sds_experiments_2d(cfg: Config2D, default_run_args: List[str]):
     current_run_args.append(f"--results-dir {result_dir}")
     current_run_args.append(f"--min-noise-step {cfg.min_noise_step}")
     current_run_args.append(f"--max-noise-step {cfg.max_noise_step}")
+    current_run_args.append(f"--scale-factor {cfg.scale_factor}")
     if (cfg.width, cfg.height) != (0, 0):
         current_run_args.append(f"--width {cfg.width}")
         current_run_args.append(f"--height {cfg.height}")
