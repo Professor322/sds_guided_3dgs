@@ -15,14 +15,11 @@ from dataclasses import dataclass
 @dataclass
 class SDSLoss3DGS_StableSR(nn.Module):
     model: LatentDiffusionSRTextWT
-    # vq_model: AutoencoderKLResi
 
     def __init__(
         self,
         model_config_path: str,
         model_checkpoint_path: str,
-        vq_model_config_path: str = "",
-        vq_model_checkpoint_path: str = "",
     ):
         super().__init__()
         self.device = torch.device("cuda:0")
@@ -42,11 +39,6 @@ class SDSLoss3DGS_StableSR(nn.Module):
         self.model = self.model.to(self.device)
         self.tile_size = 64
         self.tile_overlap = 32
-
-        # vqgan_config = OmegaConf.load(vq_model_config_path)
-        # self.vq_model = load_model_from_config(vqgan_config, vq_model_checkpoint_path)
-        # self.vq_model.decoder.fusion_w = 0.5
-        # self.vq_model = self.vq_model.to(self.device)
 
     def forward(
         self,

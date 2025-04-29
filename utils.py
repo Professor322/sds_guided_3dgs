@@ -239,3 +239,15 @@ def set_linear_noise_schedule(
 def compute_collapsing_noise_step(min_step, max_step, iter_frac):
     step = max_step - (max_step - min_step) * np.sqrt(iter_frac)
     return int(step)
+
+
+# Calculate gradient norm from optimizer's parameters
+def calculate_grad_norm(optimizers):
+    total_norm = 0.0
+    for optimizer in optimizers.values():
+        for param_group in optimizer.param_groups:
+            for param in param_group["params"]:
+                if param.grad is not None:  # Check if gradient exists
+                    param_norm = param.grad.norm(2)  # L2 norm of the gradient
+                    total_norm += param_norm.item() ** 2
+    return total_norm**0.5  # Return the overall gradient norm

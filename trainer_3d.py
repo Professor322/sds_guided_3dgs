@@ -37,6 +37,7 @@ from utils import (
     set_random_seed,
     set_linear_noise_schedule,
     compute_collapsing_noise_step,
+    calculate_grad_norm,
 )
 from lib_bilagrid import (
     BilateralGrid,
@@ -186,18 +187,6 @@ def create_splats_with_optimizers(
         visible_adam=visible_adam,
     )
     return splats, optimizers
-
-
-# Calculate gradient norm from optimizer's parameters
-def calculate_grad_norm(optimizers: Dict):
-    total_norm = 0.0
-    for optimizer in optimizers.values():
-        for param_group in optimizer.param_groups:
-            for param in param_group["params"]:
-                if param.grad is not None:  # Check if gradient exists
-                    param_norm = param.grad.norm(2)  # L2 norm of the gradient
-                    total_norm += param_norm.item() ** 2
-    return total_norm**0.5  # Return the overall gradient norm
 
 
 class Runner:

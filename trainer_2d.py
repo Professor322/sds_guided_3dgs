@@ -20,7 +20,6 @@ from typing import Dict, List, Optional, Tuple, Union
 from torchmetrics.image import PeakSignalNoiseRatio, StructuralSimilarityIndexMeasure
 import matplotlib.pyplot as plt
 import os
-from IPython.display import display, clear_output
 import torch.nn.functional as F
 from diffusers import DiffusionPipeline
 from guidance import SDSLoss3DGS, SDILoss3DGS, SDSLoss3DGS_StableSR
@@ -33,69 +32,26 @@ import tqdm
 from gsplat.strategy import DefaultStrategy
 from enum import Enum
 from fused_ssim import fused_ssim
+from utils import (
+    set_linear_noise_schedule,
+    compute_collapsing_noise_step,
+    calculate_grad_norm,
+)
 
 
-class LossType(Enum):
-    MSE: int = 0
-    SDS: int = 1
-    UNKNOWN: int = 2
-
-
-class OneImageDataset(Dataset):
-    def __init__(
-        self,
-        image_path,
-        patch_size=64,
-        dataset_len=1000,
-        training_width=256,
-        training_height=256,
-        validation_width=256,
-        validation_height=256,
-        train=True,
-        use_generated_img=False,
-    ):
-        super().__init__()
-        self.train = train
-
-        self.len = dataset_len
-        self.img = Image.open(image_path)
-        to_tensor = transforms.ToTensor()
-        img = to_tensor(self.img)
-
-        self.img = F.interpolate(
-            img.unsqueeze(0),
-            (training_width, training_height),
+def process_image(image_path: str, image_shape: Tuple[int, int]) -> torch.Tensor:
+    image = Image.open(image_path)
+    to_tensor = transforms.ToTensor()
+    image = to_tensor(image)
+    if image_shape != (0, 0):
+        image = F.interpolate(
+            image.unsqueeze(0),
+            image_shape,
+            mode="bilinear",
             align_corners=False,
             antialias=True,
-            mode="bilinear",
-        ).squeeze(0)
-        self.validation_img = F.interpolate(
-            img.unsqueeze(0),
-            (validation_width, validation_height),
-            align_corners=False,
-            antialias=True,
-            mode="bilinear",
-        ).squeeze(0)
-        self.patch_size = patch_size
-        self.training_img = None
-        self.generated_img = None
-        self.use_generated_img = use_generated_img
-
-    def __getitem__(self, idx):
-        # if self.train:
-        # C, H, W -> H, W, C
-        # i, j, h, w = transforms.RandomCrop.get_params(
-        #     self.img, output_size=(self.patch_size, self.patch_size)
-        # )
-        # img = self.img if not self.use_generated_img else self.generated_img
-        # patch_real = VF.crop(img, i, j, h, w).permute(1, 2, 0)
-        # patch_pred = VF.crop(self.training_img, i, j, h, w).permute(1, 2, 0)
-        # return patch_pred, patch_real
-        # training img already in correct shape
-        return self.training_img, self.img
-
-    def __len__(self):
-        return self.len if self.train else 1
+        )
+    return image.squeeze(0)
 
 
 class SimpleTrainer:
@@ -107,19 +63,32 @@ class SimpleTrainer:
             self.cfg.strategy = DefaultStrategy(
                 verbose=True, dropout=self.cfg.densification_dropout
             )
+            self.strategy_state = self.cfg.strategy.initialize_state()
         else:
             self.cfg.strategy = NotImplementedError
         self.strategy_state = None
         self.device = torch.device("cuda:0")
-        print(f"Loading dataset...")
-        self.one_image_dataset = OneImageDataset(
-            image_path=cfg.img_path,
-            training_height=cfg.height,
-            training_width=cfg.width,
-            validation_height=cfg.render_height,
-            validation_width=cfg.render_width,
-        )
         self.num_points = self.cfg.num_points
+        self.training_img = process_image(
+            self.cfg.training_image_path, (self.cfg.height, self.cfg.width)
+        )
+        self.height = self.training_img.size(1)
+        self.width = self.training_img.size(2)
+        self.render_width = int(self.width * self.cfg.scale_factor)
+        self.render_height = int(self.height * self.cfg.scale_factor)
+        self.validation_image = process_image(
+            self.cfg.validation_image_path, (self.render_height, self.render_width)
+        )
+
+        self.training_img = self.training_img.to(self.device)
+        self.validation_image = self.validation_image.to(self.device)
+        print(
+            f"Training image: {self.cfg.training_image_path} resolution: h{self.height}xw{self.width}"
+        )
+        print(
+            f"Validation image: {self.cfg.validation_image_path}, resolution: h{self.render_height}xw{self.render_width}"
+        )
+
         print(f"Creating directories...")
         self.ckpt_dir = f"{self.cfg.results_dir}/ckpts"
         os.makedirs(self.ckpt_dir, exist_ok=True)
@@ -132,7 +101,7 @@ class SimpleTrainer:
         self.ssim = StructuralSimilarityIndexMeasure(data_range=1.0).to(self.device)
 
         fov_x = math.pi / 2.0
-        self.focal = 0.5 * float(self.cfg.render_width) / math.tan(0.5 * fov_x)
+        self.focal = 0.5 * float(self.render_width) / math.tan(0.5 * fov_x)
 
         if self.cfg.ckpt_path:
             self.splats, self.optimizers = self.load_splats_with_optimizers()
@@ -142,34 +111,25 @@ class SimpleTrainer:
             self.cfg.strategy.check_sanity(self.splats, self.optimizers)
         print("Model initialized. Number of GS:", len(self.splats["means"]))
 
-        if self.cfg.use_sds_loss or self.cfg.use_sdi_loss:
-            self.sds_loss = (
-                SDSLoss3DGS(prompt=self.cfg.prompt)
-                if self.cfg.use_sds_loss
-                else SDILoss3DGS(prompt=self.cfg.prompt)
-            )
-        self.dataloader = DataLoader(
-            self.one_image_dataset, batch_size=cfg.batch_size, num_workers=0
-        )
-        if self.cfg.use_stable_sr_sds:
-            self.sds_loss = SDSLoss3DGS_StableSR(
-                model_checkpoint_path=self.cfg.stable_sr_checkpoint_path,
-                model_config_path=self.cfg.stable_sr_config_path,
-            )
+        if self.cfg.use_gaussian_sr:
+            if self.cfg.sds_loss_type == "deepfloyd_sdi":
+                self.sds_loss = SDILoss3DGS(prompt=self.cfg.prompt)
+            elif self.cfg.sds_loss_type == "deepfloyd_sds":
+                self.sds_loss = SDSLoss3DGS(prompt=self.cfg.prompt)
+            elif self.cfg.sds_loss_type == "stable_sr_sds":
+                self.sds_loss = SDSLoss3DGS_StableSR(
+                    model_checkpoint_path=self.cfg.stable_sr_checkpoint_path,
+                    model_config_path=self.cfg.stable_sr_config_path,
+                )
 
-        self.mse_loss = torch.nn.MSELoss()
-        self.mae_loss = torch.nn.L1Loss()
-        if self.cfg.use_noise_scheduler:
-            self.noise_scheduler = self.set_linear_time_strategy(
+        if self.cfg.classic_loss_type == "l2loss":
+            self.mse_loss = torch.nn.MSELoss()
+        elif self.cfg.classic_loss_type == "l1loss":
+            self.mae_loss = torch.nn.L1Loss()
+
+        if self.cfg.noise_scheduler_type == "linear":
+            self.noise_scheduler = set_linear_noise_schedule(
                 self.cfg.iterations, self.cfg.min_noise_step, self.cfg.max_noise_step
-            )
-        self.lr_scheduler = None
-        if self.cfg.use_lr_scheduler:
-            self.lr_scheduler = torch.optim.lr_scheduler.OneCycleLR(
-                optimizer=self.optimizer,
-                total_steps=self.cfg.iterations,
-                max_lr=self.cfg.lr,
-                pct_start=0.5,
             )
 
         if self.cfg.model_type == "3dgs":
@@ -195,8 +155,8 @@ class SimpleTrainer:
             colors=colors,
             viewmats=self.viewmat[None],  # [C, 4, 4]
             Ks=self.K[None],  # [C, 3, 3]
-            width=self.cfg.render_width,
-            height=self.cfg.render_height,
+            width=self.render_width,
+            height=self.render_height,
             packed=False,
         )
         return render_colors, render_alphas, info
@@ -250,8 +210,8 @@ class SimpleTrainer:
         )
         self.K = torch.tensor(
             [
-                [self.focal, 0, self.cfg.render_width / 2],
-                [0, self.focal, self.cfg.render_height / 2],
+                [self.focal, 0, self.render_width / 2],
+                [0, self.focal, self.render_height / 2],
                 [0, 0, 1],
             ],
             device=self.device,
@@ -278,44 +238,21 @@ class SimpleTrainer:
 
         return splats, optimizers
 
-    def set_linear_time_strategy(
-        self, output_shape, min_diffusion_steps=20, max_diffusion_steps=980
-    ):
-        return (
-            torch.linspace(min_diffusion_steps, max_diffusion_steps, output_shape)
-            .flip(0)
-            .to(torch.long)
-        )
-
-    def compute_step(self, min_step, max_step, iter_frac):
-        step = max_step - (max_step - min_step) * math.sqrt(iter_frac)
-        return int(step)
-
-    # Calculate gradient norm from optimizer's parameters
-    def calculate_grad_norm(self):
-        total_norm = 0.0
-        for optimizer in self.optimizers.values():
-            for param_group in optimizer.param_groups:
-                for param in param_group["params"]:
-                    if param.grad is not None:  # Check if gradient exists
-                        param_norm = param.grad.norm(2)  # L2 norm of the gradient
-                        total_norm += param_norm.item() ** 2
-        return total_norm**0.5  # Return the overall gradient norm
-
-    def validate(self):
+    def validate(self, iteration):
         print("Validating...")
         with torch.no_grad():
-            self.one_image_dataset.img = self.one_image_dataset.img.to(self.device)
             renders, _, _ = self.rasterize_splats()
             out_img = renders[0]
             frame = (out_img.detach().cpu().numpy() * 255).astype(np.uint8)
-            Image.fromarray(frame).save(f"{self.render_dir}/render.png")
-            psnr_with_original = self.psnr(
-                out_img, self.one_image_dataset.img.permute(1, 2, 0)
+            Image.fromarray(frame).save(f"{self.render_dir}/val_render_{iteration}.png")
+            psnr = self.psnr(out_img, self.validation_image.permute(1, 2, 0))
+            ssim = self.ssim(
+                out_img.permute(2, 0, 1).unsqueeze(0),
+                self.validation_image.unsqueeze(0),
             )
-            print(f"PSNR with original: {psnr_with_original.item()}")
-            with open(f"{self.stats_dir}/render.json", "w") as f:
-                json.dump({"psnr": psnr_with_original.item()}, f)
+            print(f"Val PSNR: {psnr.item()}, Val SSIM: {ssim.item()}")
+            with open(f"{self.stats_dir}/val_{iteration}.json", "w") as f:
+                json.dump({"psnr": psnr.item(), "ssim": ssim.item()}, f)
 
     def train(self):
         times = [0] * 2  # rasterization, backward
@@ -327,21 +264,8 @@ class SimpleTrainer:
         ssims = []
         grad_norms = []
         learning_rates = []
-        self.one_image_dataset.img = self.one_image_dataset.img.to(self.device)
-        self.one_image_dataset.validation_img = (
-            self.one_image_dataset.validation_img.to(self.device)
-        )
         prev_render = None
         diff = None
-
-        base_render = None
-        if self.cfg.use_strategy and self.strategy_state is None:
-            self.strategy_state = self.cfg.strategy.initialize_state()
-
-        current_loss_type = LossType.UNKNOWN
-        if self.cfg.use_altering_loss:
-            # we start with SDS
-            current_loss_type = LossType.SDS
 
         if cfg.debug_training:
             # clone params
@@ -363,97 +287,11 @@ class SimpleTrainer:
             if prev_render is not None:
                 diff = (prev_render - out_img).clamp(0.0, 1.0)
 
-            if base_render is None:
-                base_render = out_img.detach().clone()
-                base_render.requires_grad = True
-
             torch.cuda.synchronize()
             times[0] += time.time() - start
-            if self.cfg.use_classic_mse_loss:
-                # calculate loss
-                mse_loss = self.mse_loss(
-                    out_img.permute(2, 0, 1), self.one_image_dataset.img
-                )
-            elif self.cfg.use_downscaled_mse_loss:
-                # downscale the base image and rendering
-                # compute mse
-                resolution = (64, 64)
-                # interpolate expects b, c, h, w, while we have h, w, c
-                downscaled_out_img = F.interpolate(
-                    out_img.permute(2, 0, 1).unsqueeze(0),
-                    resolution,
-                    mode="bilinear",
-                    align_corners=False,
-                    antialias=True,
-                )
-                downscaled_base_render = F.interpolate(
-                    base_render.permute(2, 0, 1).unsqueeze(0),
-                    resolution,
-                    mode="bilinear",
-                    align_corners=False,
-                    antialias=True,
-                )
-                mse_loss = self.mse_loss(downscaled_out_img, downscaled_base_render)
-
-            if self.cfg.use_sds_loss or self.cfg.use_sdi_loss:
-                # H, W, C -> C, H, W
-                if self.cfg.base_render_as_cond:
-                    self.dataloader.dataset.generated_img = base_render.permute(2, 0, 1)
-                    self.dataloader.dataset.use_generated_img = True
-                self.dataloader.dataset.training_img = out_img.permute(2, 0, 1)
-                pred, real = next(iter(self.dataloader))
-                pred = pred.to(self.device)  # .permute(0, 3, 1, 2)
-                real = real.to(self.device)  # .permute(0, 3, 1, 2)
-                if self.cfg.collapsing_noise_scheduler:
-                    min_step = self.compute_step(200, 300, i / self.cfg.iterations)
-                    max_step = self.compute_step(500, 980, i / self.cfg.iterations)
-                elif self.cfg.noise_step_anealing > 0:
-                    min_step = int(
-                        min(
-                            self.cfg.min_noise_step,
-                            self.cfg.max_noise_step - i / self.cfg.noise_step_anealing,
-                        )
-                    )
-                    max_step = self.cfg.max_noise_step
-                else:
-                    min_step = self.cfg.min_noise_step
-                    max_step = self.cfg.max_noise_step
-                sds = (
-                    self.sds_loss(
-                        images=pred,
-                        original=real,
-                        min_step=min_step,
-                        max_step=max_step,
-                        lowres_noise_level=self.cfg.lowres_noise_level,
-                        scheduler_timestep=self.noise_scheduler[i]
-                        if self.cfg.use_noise_scheduler
-                        else None,
-                        downscale_condition=cfg.downscale_condition,
-                        guidance_scale=cfg.guidance_scale,
-                    )
-                    * self.cfg.lmbd
-                )
-            if cfg.use_stable_sr_sds:
-                sds = (
-                    self.sds_loss(
-                        render=out_img.permute(2, 0, 1).unsqueeze(0),
-                        condition=self.dataloader.dataset.img.unsqueeze(0),
-                        min_noise_step=self.cfg.min_noise_step,
-                        max_noise_step=self.cfg.max_noise_step,
-                    )
-                    * self.cfg.lmbd
-                )
-                sds = sds.squeeze()
 
             if cfg.use_gaussian_sr:
-                # do not use base renders anymore
-                # render image in HR 256x256
-                # apply noise to it and condition on LR (64x64)
-                # original image (probably do not apply any noise to condition)
-                # calculate SDS
-                # downscale rendering into 256x256->64x64 and calculate MSE
-                # final loss MSE + lmbd * SDS (how to do it properly?)
-                resolution = (self.cfg.width, self.cfg.height)
+                resolution = (self.height, self.width)
                 downscaled_render = F.interpolate(
                     out_img.permute(2, 0, 1).unsqueeze(0),
                     resolution,
@@ -461,65 +299,90 @@ class SimpleTrainer:
                     align_corners=False,
                     antialias=True,
                 )
-                if cfg.use_mae_loss:
-                    loss = self.mae_loss(
-                        downscaled_render, self.dataloader.dataset.img.unsqueeze(0)
+                if cfg.classic_loss_type == "l1loss":
+                    # we need to minimize
+                    # this one wants [B, C, H, W]
+                    ssim_loss = (
+                        1.0
+                        - fused_ssim(downscaled_render, self.training_img.unsqueeze(0))
+                        * self.cfg.ssim_lambda
                     )
-                else:
+                    loss = (
+                        self.mae_loss(downscaled_render, self.training_img.unsqueeze(0))
+                        + ssim_loss
+                    )
+                elif cfg.classic_loss_type == "l2loss":
                     loss = self.mse_loss(
-                        downscaled_render, self.dataloader.dataset.img.unsqueeze(0)
+                        downscaled_render, self.training_img.unsqueeze(0)
                     )
-                if cfg.use_sds_loss or cfg.use_sdi_loss or cfg.use_stable_sr_sds:
-                    loss += sds.squeeze()
-                if cfg.use_ssim_loss:
-                    loss += cfg.ssim_lambda * (
+                sds = 0.0
+                if self.cfg.sds_loss_type != "none":
+                    if self.cfg.noise_scheduler_type == "collapsing":
+                        min_step = compute_collapsing_noise_step(
+                            200, 300, i / self.cfg.iterations
+                        )
+                        max_step = compute_collapsing_noise_step(
+                            500, 980, i / self.cfg.iterations
+                        )
+                    elif self.cfg.noise_scheduler_type == "annealing":
+                        assert self.cfg.noise_step_anealing > 0
+                        min_step = int(
+                            max(
+                                self.cfg.min_noise_step,
+                                self.cfg.max_noise_step
+                                - i / self.cfg.noise_step_anealing,
+                            )
+                        )
+                        max_step = self.cfg.max_noise_step
+                    else:
+                        min_step = self.cfg.min_noise_step
+                        max_step = self.cfg.max_noise_step
+                    if self.cfg.sds_loss_type in ("deepfloyd_sds", "deepfloyd_sdi"):
+                        sds = self.sds_loss(
+                            images=out_img.permute(2, 0, 1).unsqueeze(0),
+                            original=self.training_img.unsqueeze(0),
+                            min_step=min_step,
+                            max_step=max_step,
+                            lowres_noise_level=self.cfg.lowres_noise_level,
+                            scheduler_timestep=self.noise_scheduler[i]
+                            if self.cfg.noise_scheduler_type == "linear"
+                            else None,
+                            downscale_condition=False,
+                            guidance_scale=cfg.guidance_scale,
+                        ).squeeze()
+                    elif self.cfg.sds_loss_type == "stable_sr_sds":
+                        sds = self.sds_loss(
+                            render=out_img.permute(2, 0, 1).unsqueeze(0),
+                            condition=self.training_img.unsqueeze(0),
+                            min_noise_step=min_step,
+                            max_noise_step=max_step,
+                        ).squeeze()
+
+                loss += sds * self.cfg.sds_lambda
+
+            else:
+                if cfg.classic_loss_type == "l1loss":
+                    # this one wants [B, C, H, W]
+                    ssim_loss = (
                         1.0
                         - fused_ssim(
-                            downscaled_render,
-                            self.dataloader.dataset.img.unsqueeze(0),
+                            out_img.permute(2, 0, 1).unsqueeze(0),
+                            self.training_img.unsqueeze(0),
                         )
+                        * self.cfg.ssim_lambda
                     )
-
-            elif self.cfg.use_altering_loss:
-                if current_loss_type == LossType.MSE:
-                    loss = mse_loss
-                    current_loss_type = LossType.SDS
-                elif current_loss_type == LossType.SDS:
-                    loss = sds
-                    current_loss_type = LossType.MSE
-            elif self.cfg.use_fused_loss and (
-                self.cfg.use_sds_loss or self.cfg.use_sdi_loss
-            ):
-                ssim_loss = 0.0
-                if self.cfg.use_ssim_loss:
-                    # we need to minimize
-                    # this one wants [B, C, H, W]
-                    ssim_loss = 1.0 - fused_ssim(
+                    loss = (
+                        self.mae_loss(
+                            out_img.permute(2, 0, 1).unsqueeze(0),
+                            self.training_img.unsqueeze(0),
+                        )
+                        + ssim_loss
+                    )
+                elif cfg.classic_loss_type == "l2loss":
+                    loss = self.mse_loss(
                         out_img.permute(2, 0, 1).unsqueeze(0),
-                        base_render.permute(2, 0, 1).unsqueeze(0),
+                        self.training_img.unsqueeze(0),
                     )
-                loss = mse_loss + sds + ssim_loss
-            elif self.cfg.use_sds_loss or self.cfg.use_sdi_loss:
-                ssim_loss = 0.0
-                if self.cfg.use_ssim_loss:
-                    # we need to minimize
-                    # this one wants [B, C, H, W]
-                    ssim_loss = 1.0 - fused_ssim(
-                        out_img.permute(2, 0, 1).unsqueeze(0),
-                        base_render.permute(2, 0, 1).unsqueeze(0),
-                    )
-                loss = sds + ssim_loss
-            else:
-                # this is classical 3DGS case
-                ssim_loss = 0.0
-                if self.cfg.use_ssim_loss:
-                    # we need to minimize
-                    # this one wants [B, C, H, W]
-                    ssim_loss = 1.0 - fused_ssim(
-                        out_img.permute(2, 0, 1).unsqueeze(0),
-                        self.one_image_dataset.img.unsqueeze(0),
-                    )
-                loss = mse_loss + ssim_loss
 
             start = time.time()
             loss.backward()
@@ -533,13 +396,11 @@ class SimpleTrainer:
                 )
 
             # this one wants [H, W, C]
-            psnr = self.psnr(
-                out_img, self.one_image_dataset.validation_img.permute(1, 2, 0)
-            )
+            psnr = self.psnr(out_img, self.validation_image.permute(1, 2, 0))
             # this one wants [B, C, H, W]
             ssim = self.ssim(
                 out_img.permute(2, 0, 1).unsqueeze(0),
-                self.one_image_dataset.validation_img.unsqueeze(0),
+                self.validation_image.unsqueeze(0),
             )
 
             if self.cfg.grad_clipping > 0.0:
@@ -550,7 +411,7 @@ class SimpleTrainer:
             # stats
             losses.append(loss.item())
             psnrs.append(psnr.item())
-            grad_norms.append(self.calculate_grad_norm())
+            grad_norms.append(calculate_grad_norm(self.optimizers))
             ssims.append(ssim.item())
             # learning rate and scheduling is the same for all params
             learning_rates.append(self.optimizers["means"].param_groups[0]["lr"])
@@ -585,18 +446,9 @@ class SimpleTrainer:
             )
             prev_render = out_img.detach().clone()
             if i % self.cfg.show_steps == 0 or i == end - 1 or i == begin + 1:
-                if self.cfg.show_plots:
-                    clear_output(wait=True)
-                base_render_rgb = (base_render.detach().cpu().numpy() * 255).astype(
-                    np.uint8
-                )
                 pred = (out_img.detach().cpu().numpy() * 255).astype(np.uint8)
                 orig = (
-                    self.one_image_dataset.validation_img.permute(1, 2, 0)
-                    .detach()
-                    .cpu()
-                    .numpy()
-                    * 255
+                    self.validation_image.permute(1, 2, 0).detach().cpu().numpy() * 255
                 ).astype(np.uint8)
 
                 # Create the figure with an additional row for the new plot
@@ -611,11 +463,6 @@ class SimpleTrainer:
                 axes[0, 1].imshow(pred)
                 axes[0, 1].set_title("Predicted Image")
                 axes[0, 1].axis("off")
-
-                # Plot 3: Base Render Image
-                axes[0, 2].imshow(base_render_rgb)
-                axes[0, 2].set_title("Base Render from Start of Training")
-                axes[0, 2].axis("off")
 
                 # Plot 4: PSNR Evolution
                 axes[1, 0].plot(psnrs, label="PSNR")
@@ -667,16 +514,12 @@ class SimpleTrainer:
                     axes[2, 2].axis("off")
                 # Adjust layout
                 plt.tight_layout()
-
-                if self.cfg.show_plots:
-                    plt.show()
-                else:
-                    plt.savefig(
-                        f"{self.stats_dir}/training_plots.png",
-                        dpi=300,
-                        bbox_inches="tight",
-                    )
-                    plt.close(fig)
+                plt.savefig(
+                    f"{self.stats_dir}/training_plots.png",
+                    dpi=300,
+                    bbox_inches="tight",
+                )
+                plt.close(fig)
                 if self.cfg.save_imgs:
                     frame = (out_img.detach().cpu().numpy() * 255).astype(np.uint8)
                     Image.fromarray(frame).save(f"{self.render_dir}/image_{i}.png")
@@ -697,6 +540,9 @@ class SimpleTrainer:
                 with open(f"{self.stats_dir}/step{i}.json", "w") as f:
                     json.dump({"psnr": psnr.item(), "ssim": ssim.item()}, f)
 
+            if i in [idx - 1 for idx in self.cfg.valiation_steps] or i == end - 1:
+                self.validate(i)
+
         print(f"Total(s):\nRasterization: {times[0]:.3f}, Backward: {times[1]:.3f}")
         print(
             f"Per step(s):\nRasterization: {times[0]/self.cfg.iterations:.5f}, Backward: {times[1]/self.cfg.iterations:.5f}"
@@ -714,7 +560,7 @@ def main(
 
     trainer = SimpleTrainer(cfg=cfg)
     if cfg.validate:
-        trainer.validate()
+        trainer.validate(0)
     else:
         trainer.train()
 

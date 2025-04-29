@@ -183,71 +183,91 @@ class Config3D:
 
 @dataclass
 class Config2D:
-    render_width: int = 256
-    render_height: int = 256
-    # this is training width and height
-    width: int = 256
-    height: int = 256
+    # input image width, leave it equal to 0
+    # in case you want to preserve original size
+    width: int = 0
+    # input image height, leave it equal to 0
+    # in case you want to preserve original size
+    height: int = 0
+    # number of splats to fit
     num_points: int = 100_000
+    # whether to store images during saving epoch
     save_imgs: bool = True
+    # number of iterawtions to run
     iterations: int = 1_000
+    # learning rate for training
     lr: float = 0.01
+    # type of splat model to run
     model_type: Literal["3dgs", "2dgs"] = "3dgs"
-    save_steps: List[int] = field(
-        default_factory=lambda: [500, 700, 1_000, 3_000, 7_000, 30_000]
+    # checkpoint save steps
+    save_steps: List[int] = field(default_factory=lambda: [1_000, 3_000, 7_000, 30_000])
+    # validation steps
+    valiation_steps: List[int] = field(
+        default_factory=lambda: [1_000, 3_000, 7_000, 30_000]
     )
-    img_path: str = ""
+    # path to image used for training
+    training_image_path: str = ""
+    # path to image used for validation
+    validation_image_path: str = ""
+    # checkpoint path
     ckpt_path: str = ""
+    # directory for saving results
     results_dir: str = "results_2d"
+    # how often to update training meta data
     show_steps: int = 200
-    use_sds_loss: bool = False
-    use_sdi_loss: bool = False
-    use_fused_loss: bool = False
-    lmbd: float = 1.0
-    save_images: bool = False
-    patch_image: bool = False
-    batch_size: int = 64
+    # coefficient for SDS loss
+    sds_lambda: float = 1.0
     # noise level for conditional image
-    lowres_noise_level: float = 0.75
+    lowres_noise_level: float = 0.0
     # minimum step for forward diffusion process
     min_noise_step: int = 20
     # maximum step for forward diffusion process
     max_noise_step: int = 980
-    # instead randomly sampling noise we can
-    # linearly changing applied noise
-    use_noise_scheduler: bool = False
-    # this one will gradually collaps t_min and t_max
-    collapsing_noise_scheduler: bool = False
-    show_plots: bool = False
-    base_render_as_cond: bool = False
-    use_lr_scheduler: bool = False
-    downscale_condition: bool = False
+    # prompt for diffusion model in case
+    # of deepfloyd sds
     prompt: str = ""
+    # classic loss type to use, for l1loss we will loss add lambda * d-ssim
+    classic_loss_type: Literal["l2loss", "l1loss"] = "l2loss"
+    # type of sds loss in case of gaussianSR
+    sds_loss_type: Literal[
+        "deepfloyd_sds", "deepfloyd_sdi", "stable_sr_sds", "none"
+    ] = "none"
+    # guidance scale for the diffusion model incase of deepfloyd
     guidance_scale: float = 10.0
-    use_classic_mse_loss: bool = False
+    # use_classic_mse_loss: bool = False
     use_downscaled_mse_loss: bool = False
+    # whether to use densification process or not
     use_strategy: bool = False
-    # for pruning
+    # noise scheduler type
+    noise_scheduler_type: Literal["collapsing", "linear", "annealing", "none"] = "none"
+    # for densification process
     strategy: DefaultStrategy = field(default_factory=DefaultStrategy)
+    # whether to use checkpoint for validation
     validate: bool = False
     # in altering fashion: one iteration of sds,
     # then one iteration of mse
     use_altering_loss: bool = False
-    use_ssim_loss: bool = False
-
+    # this is to track if parameters are being changed
     debug_training: bool = False
+    # gradient clipping option 0.0 - means disabled
     grad_clipping: float = 0.0
     # implementing method from the paper
     use_gaussian_sr: bool = False
+    # scale factor for gaussian sr
+    scale_factor: int = 1
+    # noise step annealing when annealing
+    # noise scheduler is enabled
     noise_step_anealing: int = 0
+    # lambda for ssim coefficient
     ssim_lambda: float = 0.2
-    use_mae_loss: bool = False
+    # splat dropout during during default
+    # densification process
     densification_dropout: float = 0.0
-    # stableSR parameters
-    use_stable_sr_sds: bool = False
+    # path to StableSR config
     stable_sr_config_path: str = (
         "StableSR/configs/stableSRNew/v2-finetune_text_T_512.yaml"
     )
+    # path to StableSR checkpoint
     stable_sr_checkpoint_path: str = "StableSR/stablesr_000117.ckpt"
 
 
