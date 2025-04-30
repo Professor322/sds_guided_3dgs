@@ -54,6 +54,14 @@ class SDSLoss3DGS_StableSR(nn.Module):
         render = 2.0 * render - 1.0
         condition = 2.0 * condition - 1.0
 
+        # resolution has to be a multiple of tile_overlap
+        height, width = render.size(2), render.size(3)
+        height, width = (
+            height - height % self.tile_overlap,
+            width - width % self.tile_overlap,
+        )
+        render = F.interpolate(render, (height, width), mode="bicubic")
+
         render_latent = self.model.get_first_stage_encoding(
             self.model.encode_first_stage(render)
         )
@@ -74,8 +82,7 @@ class SDSLoss3DGS_StableSR(nn.Module):
             x_start=render_latent, t=t, noise=noise
         )
         # upscale condition and encode it as well
-        width, height = render.size(2), render.size(3)
-        condition_upscaled = F.interpolate(condition, (width, height), mode="bicubic")
+        condition_upscaled = F.interpolate(condition, (height, width), mode="bicubic")
         condition_upscaled_latent = self.model.get_first_stage_encoding(
             self.model.encode_first_stage(condition_upscaled)
         )
