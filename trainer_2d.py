@@ -61,7 +61,7 @@ class SimpleTrainer:
         self.cfg = cfg
         if self.cfg.use_strategy:
             self.cfg.strategy = DefaultStrategy(
-                verbose=True,  # dropout=self.cfg.densification_dropout
+                verbose=True, dropout=self.cfg.densification_dropout
             )
             self.strategy_state = self.cfg.strategy.initialize_state()
         else:
@@ -328,7 +328,7 @@ class SimpleTrainer:
                         min_step = int(
                             max(
                                 self.cfg.min_noise_step,
-                                self.cfg.max_noise_step
+                                (self.cfg.max_noise_step - 1)
                                 - i / self.cfg.noise_step_anealing,
                             )
                         )

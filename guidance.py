@@ -62,7 +62,7 @@ class SDSLoss3DGS_StableSR(nn.Module):
             height - height % self.tile_overlap,
             width - width % self.tile_overlap,
         )
-        render = F.interpolate(render, (height, width), mode="bicubic")
+        render = F.interpolate(render, (height, width), mode="bilinear")
 
         render_latent = self.model.get_first_stage_encoding(
             self.model.encode_first_stage(render)
@@ -92,7 +92,7 @@ class SDSLoss3DGS_StableSR(nn.Module):
         ), "noised_render_latent has no gradient enabled"
 
         # upscale condition and encode it as well
-        condition_upscaled = F.interpolate(condition, (height, width), mode="bicubic")
+        condition_upscaled = F.interpolate(condition, (height, width), mode="bilinear")
         condition_upscaled_latent = self.model.get_first_stage_encoding(
             self.model.encode_first_stage(condition_upscaled)
         )

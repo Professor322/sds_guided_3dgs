@@ -82,9 +82,14 @@ def sds_experiments_2d(cfg: Config2D, default_run_args: List[str]):
     checkpopint_num = 29999
     cfg.num_points = 10_000
     cfg.use_gaussian_sr = True
-    cfg.scale_factor = 2
-    cfg.sds_loss_type = "none"
+    cfg.scale_factor = 4
+    cfg.sds_loss_type = "stable_sr_sds"
     cfg.classic_loss_type = "l1loss"
+    cfg.noise_scheduler_type = "annealing"
+    cfg.noise_step_anealing = 100
+    cfg.sds_lambda = 0.001
+    cfg.use_strategy = True
+    cfg.densification_dropout = 0.7
     training_scale = 16
     validation_scale = training_scale // cfg.scale_factor
     cfg.validation_image_path = (
