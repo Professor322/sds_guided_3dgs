@@ -12,7 +12,7 @@ index 5db40fb..f3554b2 100644
  # -------------------------------------------------------------------- #
  # --------------------------- blur kernels --------------------------- #
 diff --git a/ldm/models/diffusion/ddpm.py b/ldm/models/diffusion/ddpm.py
-index 4664826..9c01769 100644
+index 4664826..09300d1 100644
 --- a/ldm/models/diffusion/ddpm.py
 +++ b/ldm/models/diffusion/ddpm.py
 @@ -16,7 +16,7 @@ from contextlib import contextmanager
@@ -24,6 +24,40 @@ index 4664826..9c01769 100644
 
  from ldm.util import log_txt_as_img, exists, default, ismap, isimage, mean_flat, count_params, instantiate_from_config
  from ldm.modules.ema import LitEma
+@@ -1633,25 +1633,6 @@ class LatentDiffusionSRTextWT(DDPM):
+                 else:
+                     param.requires_grad = True
+
+-        print('>>>>>>>>>>>>>>>>model>>>>>>>>>>>>>>>>>>>>')
+-        param_list = []
+-        for name, params in self.model.named_parameters():
+-            if params.requires_grad:
+-                param_list.append(name)
+-        print(param_list)
+-        param_list = []
+-        print('>>>>>>>>>>>>>>>>>cond_stage_model>>>>>>>>>>>>>>>>>>>')
+-        for name, params in self.cond_stage_model.named_parameters():
+-            if params.requires_grad:
+-                param_list.append(name)
+-        print(param_list)
+-        param_list = []
+-        print('>>>>>>>>>>>>>>>>structcond_stage_model>>>>>>>>>>>>>>>>>>>>')
+-        for name, params in self.structcond_stage_model.named_parameters():
+-            if params.requires_grad:
+-                param_list.append(name)
+-        print(param_list)
+-
+         # P2 weighting: https://github.com/jychoi118/P2-weighting
+         if p2_gamma is not None:
+             assert p2_k is not None
+@@ -2246,7 +2227,6 @@ class LatentDiffusionSRTextWT(DDPM):
+             else:
+                 return self.first_stage_model.decode(z)
+
+-    @torch.no_grad()
+     def encode_first_stage(self, x):
+         if hasattr(self, "split_input_params"):
+             if self.split_input_params["patch_distributed_vq"]:
 diff --git a/ldm/modules/encoders/modules.py b/ldm/modules/encoders/modules.py
 index d2ac91a..36eb19e 100644
 --- a/ldm/modules/encoders/modules.py

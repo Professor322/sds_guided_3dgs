@@ -54,6 +54,8 @@ class SDSLoss3DGS_StableSR(nn.Module):
         render = 2.0 * render - 1.0
         condition = 2.0 * condition - 1.0
 
+        assert render.requires_grad, "render has no gradient enabled"
+
         # resolution has to be a multiple of tile_overlap
         height, width = render.size(2), render.size(3)
         height, width = (
@@ -65,6 +67,9 @@ class SDSLoss3DGS_StableSR(nn.Module):
         render_latent = self.model.get_first_stage_encoding(
             self.model.encode_first_stage(render)
         )
+
+        assert render_latent.requires_grad, "render_latent has no gradient enabled"
+
         text_init = [""] * batch_size
         semantic_c = self.model.cond_stage_model(text_init)
 
@@ -81,6 +86,11 @@ class SDSLoss3DGS_StableSR(nn.Module):
         noised_render_latent = self.model.q_sample(
             x_start=render_latent, t=t, noise=noise
         )
+
+        assert (
+            noised_render_latent.requires_grad
+        ), "noised_render_latent has no gradient enabled"
+
         # upscale condition and encode it as well
         condition_upscaled = F.interpolate(condition, (height, width), mode="bicubic")
         condition_upscaled_latent = self.model.get_first_stage_encoding(

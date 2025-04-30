@@ -234,8 +234,6 @@ class Config2D:
     ] = "none"
     # guidance scale for the diffusion model incase of deepfloyd
     guidance_scale: float = 10.0
-    # use_classic_mse_loss: bool = False
-    use_downscaled_mse_loss: bool = False
     # whether to use densification process or not
     use_strategy: bool = False
     # noise scheduler type
