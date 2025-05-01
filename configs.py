@@ -261,6 +261,8 @@ class Config2D:
     # splat dropout during during default
     # densification process
     densification_dropout: float = 0.0
+    # color correction mode
+    color_correction_mode: Literal["adain", "wavelet", "none"] = "none"
     # path to StableSR config
     stable_sr_config_path: str = (
         "StableSR/configs/stableSRNew/v2-finetune_text_T_512.yaml"

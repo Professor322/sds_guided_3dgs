@@ -130,6 +130,10 @@ def sds_experiments_2d(cfg: Config2D, default_run_args: List[str]):
             )
             result_dir += f"_{cfg.sds_loss_type}"
             current_run_args.append(f"--sds-loss-type {cfg.sds_loss_type}")
+            result_dir += f"_{cfg.color_correction_mode}"
+            current_run_args.append(
+                f"--color-correction-mode {cfg.color_correction_mode}"
+            )
         if cfg.noise_step_anealing > 0 and cfg.noise_scheduler_type == "annealing":
             result_dir += f"_anealing_{cfg.noise_step_anealing}"
             current_run_args.append(f"--noise-step-anealing {cfg.noise_step_anealing}")

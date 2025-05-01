@@ -37,6 +37,10 @@ from utils import (
     compute_collapsing_noise_step,
     calculate_grad_norm,
 )
+from StableSR.scripts.wavelet_color_fix import (
+    adaptive_instance_normalization,
+    wavelet_reconstruction,
+)
 
 
 def process_image(image_path: str, image_shape: Tuple[int, int]) -> torch.Tensor:
@@ -282,6 +286,20 @@ class SimpleTrainer:
                     self.splats, self.optimizers, self.strategy_state, i, info
                 )
             out_img = renders[0]
+            if cfg.use_gaussian_sr:
+                if cfg.color_correction_mode == "adain":
+                    out_img = adaptive_instance_normalization(
+                        out_img.permute(2, 0, 1).unsqueeze(0),
+                        self.training_img.unsqueeze(0),
+                    )
+                    out_img = out_img.squeeze(0).permute(1, 2, 0)
+                elif cfg.color_correction_mode == "wavelet":
+                    out_img = wavelet_reconstruction(
+                        out_img.permute(2, 0, 1).unsqueeze(0),
+                        self.training_img.unsqueeze(0),
+                    )
+                    out_img = out_img.squeeze(0).permute(1, 2, 0)
+
             # how much pixels have changed compared to previous iteration
             if prev_render is not None:
                 diff = (prev_render - out_img).clamp(0.0, 1.0)
