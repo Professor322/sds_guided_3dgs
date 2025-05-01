@@ -241,11 +241,30 @@ class SimpleTrainer:
 
         return splats, optimizers
 
+    def do_color_correction(self, out_img: Tensor):
+        if cfg.color_correction_mode == "adain":
+            out_img = adaptive_instance_normalization(
+                out_img.permute(2, 0, 1).unsqueeze(0),
+                self.training_img.unsqueeze(0),
+            )
+            out_img = out_img.squeeze(0).permute(1, 2, 0)
+        elif cfg.color_correction_mode == "wavelet":
+            out_img = wavelet_reconstruction(
+                out_img.permute(2, 0, 1).unsqueeze(0),
+                F.interpolate(
+                    self.training_img.unsqueeze(0),
+                    (out_img.size(0), out_img.size(1)),
+                    mode="bilinear",
+                ),
+            )
+            out_img = out_img.squeeze(0).permute(1, 2, 0)
+        return out_img.clamp(0.0, 1.0)
+
     def validate(self, iteration):
         print("Validating...")
         with torch.no_grad():
             renders, _, _ = self.rasterize_splats()
-            out_img = renders[0]
+            out_img = self.do_color_correction(renders[0])
             frame = (out_img.detach().cpu().numpy() * 255).astype(np.uint8)
             Image.fromarray(frame).save(f"{self.render_dir}/val_render_{iteration}.png")
             psnr = self.psnr(out_img, self.validation_image.permute(1, 2, 0))
@@ -285,20 +304,7 @@ class SimpleTrainer:
                 self.cfg.strategy.step_pre_backward(
                     self.splats, self.optimizers, self.strategy_state, i, info
                 )
-            out_img = renders[0]
-            if cfg.use_gaussian_sr:
-                if cfg.color_correction_mode == "adain":
-                    out_img = adaptive_instance_normalization(
-                        out_img.permute(2, 0, 1).unsqueeze(0),
-                        self.training_img.unsqueeze(0),
-                    )
-                    out_img = out_img.squeeze(0).permute(1, 2, 0)
-                elif cfg.color_correction_mode == "wavelet":
-                    out_img = wavelet_reconstruction(
-                        out_img.permute(2, 0, 1).unsqueeze(0),
-                        self.training_img.unsqueeze(0),
-                    )
-                    out_img = out_img.squeeze(0).permute(1, 2, 0)
+            out_img = self.do_color_correction(renders[0])
 
             # how much pixels have changed compared to previous iteration
             if prev_render is not None:

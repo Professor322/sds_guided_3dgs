@@ -1,13 +1,9 @@
 from configs import Config2D
-import tyro
 import os
 import json
 import glob
 from typing import List
-
-DEBUG = False
-GET_PLOTS = False
-TOP_PSNRS = False
+import argparse
 
 SBATCH_TEMPLATE = """#!/bin/bash
 #SBATCH --time=24:00:00
@@ -28,7 +24,7 @@ echo "starting 2d training"
 SBATCH_FILENAME = "2d_training_generated.sbatch"
 
 
-def classic_splats_with_validation_2d(cfg: Config2D, default_run_args: List[str]):
+def classic_splats_with_validation_2d(cfg: Config2D, default_run_args: List[str], opt):
     result_dir = "results_2d_classic"
     cfg.iterations = 30_000
     cfg.num_points = 10_000
@@ -68,17 +64,17 @@ def classic_splats_with_validation_2d(cfg: Config2D, default_run_args: List[str]
     file_content = (
         SBATCH_TEMPLATE + "\n" + f"echo '{result_dir}'\n" + " ".join(current_run_args)
     )
-    if DEBUG:
+    if opt.debug:
         print(file_content)
     with open(SBATCH_FILENAME, "w") as file:
         file.write(file_content)
-    if not DEBUG and not GET_PLOTS and not TOP_PSNRS:
+    if not opt.debug and not opt.top_psnr:
         os.system(f"sbatch {SBATCH_FILENAME}")
 
     return [result_dir]
 
 
-def sds_experiments_2d(cfg: Config2D, default_run_args: List[str]):
+def sds_experiments_2d(cfg: Config2D, default_run_args: List[str], opt):
     checkpopint_num = 29999
     cfg.num_points = 10_000
     cfg.use_gaussian_sr = True
@@ -86,6 +82,7 @@ def sds_experiments_2d(cfg: Config2D, default_run_args: List[str]):
     cfg.sds_loss_type = "stable_sr_sds"
     cfg.classic_loss_type = "l1loss"
     cfg.noise_scheduler_type = "annealing"
+    # cfg.color_correction_mode = 'wavelet'
     cfg.noise_step_anealing = 100
     cfg.sds_lambda = 0.001
     cfg.use_strategy = True
@@ -130,13 +127,11 @@ def sds_experiments_2d(cfg: Config2D, default_run_args: List[str]):
             )
             result_dir += f"_{cfg.sds_loss_type}"
             current_run_args.append(f"--sds-loss-type {cfg.sds_loss_type}")
-            result_dir += f"_{cfg.color_correction_mode}"
-            current_run_args.append(
-                f"--color-correction-mode {cfg.color_correction_mode}"
-            )
-        if cfg.noise_step_anealing > 0 and cfg.noise_scheduler_type == "annealing":
-            result_dir += f"_anealing_{cfg.noise_step_anealing}"
-            current_run_args.append(f"--noise-step-anealing {cfg.noise_step_anealing}")
+            if cfg.noise_step_anealing > 0 and cfg.noise_scheduler_type == "annealing":
+                result_dir += f"_{cfg.noise_step_anealing}"
+                current_run_args.append(
+                    f"--noise-step-anealing {cfg.noise_step_anealing}"
+                )
 
     if cfg.grad_clipping > 0.0:
         result_dir += f"_grad_clip_{str(cfg.grad_clipping).replace('.', '_')}"
@@ -154,9 +149,8 @@ def sds_experiments_2d(cfg: Config2D, default_run_args: List[str]):
 
     result_dir += f"_{cfg.classic_loss_type}"
     current_run_args.append(f"--classic-loss-type {cfg.classic_loss_type}")
-
-    result_dir += f"_num_points_{cfg.num_points}"
-    current_run_args.append(f"--num-points {cfg.num_points}")
+    result_dir += f"_color_cor_{cfg.color_correction_mode}"
+    current_run_args.append(f"--color-correction-mode {cfg.color_correction_mode}")
     current_run_args.append(f"--lowres-noise-level {cfg.lowres_noise_level}")
     current_run_args.append(f"--results-dir {result_dir}")
     current_run_args.append(f"--min-noise-step {cfg.min_noise_step}")
@@ -169,11 +163,11 @@ def sds_experiments_2d(cfg: Config2D, default_run_args: List[str]):
     file_content = (
         SBATCH_TEMPLATE + "\n" + f"echo '{result_dir}'\n" + " ".join(current_run_args)
     )
-    if DEBUG:
+    if opt.debug:
         print(file_content)
     with open(SBATCH_FILENAME, "w") as file:
         file.write(file_content)
-    if not DEBUG and not GET_PLOTS and not TOP_PSNRS:
+    if not opt.debug and not opt.top_psnr:
         os.system(f"sbatch {SBATCH_FILENAME}")
     return [result_dir]
 
@@ -181,6 +175,17 @@ def sds_experiments_2d(cfg: Config2D, default_run_args: List[str]):
 def main(
     cfg: Config2D,
 ) -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--debug", action="store_true", help="does a dry run of sbatch command"
+    )
+    parser.add_argument(
+        "--top-psnr",
+        action="store_true",
+        help="scans directory for results_2d* folders and checks psnr in checkpoints",
+    )
+    parser.add_argument("--dir", type=str, default=".", help="dir to check for psnr")
+    opt = parser.parse_args()
 
     do_sds_experiments = True
     do_classic_experiments = False
@@ -190,12 +195,12 @@ def main(
     ]
     result_dirs = []
     if do_sds_experiments:
-        result_dirs += sds_experiments_2d(cfg, default_run_args)
+        result_dirs += sds_experiments_2d(cfg, default_run_args, opt)
     if do_classic_experiments:
-        result_dirs += classic_splats_with_validation_2d(cfg, default_run_args)
+        result_dirs += classic_splats_with_validation_2d(cfg, default_run_args, opt)
 
-    result_dirs = glob.glob("./results_2d/results_2d_low*")
-    if TOP_PSNRS:
+    if opt.top_psnr:
+        result_dirs = glob.glob(f"{opt.dir}/results_2d_low*")
         print("Getting psnrs...")
         psnrs_to_dirs = []
         for result_dir in result_dirs:
@@ -216,5 +221,4 @@ def main(
 
 
 if __name__ == "__main__":
-    cfg = tyro.cli(Config2D)
-    main(cfg)
+    main(cfg=Config2D())
