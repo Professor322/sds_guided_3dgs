@@ -12,6 +12,7 @@ from StableSR.ldm.models.autoencoder import AutoencoderKLResi
 from dataclasses import dataclass
 import numpy as np
 from PIL import Image
+from typing import Literal
 
 
 @dataclass
@@ -20,9 +21,11 @@ class SDSLoss3DGS_StableSR(nn.Module):
     encoder: AutoencoderKLResi
     decode_images_every: int = 0
     render_dir: str = ""
+    interpolation_type: Literal["bicubic", "bilinear"] = "bilinear"
 
     def __init__(
         self,
+        interpolation_type: Literal["bicubic", "bilinear"],
         model_config_path: str,
         model_checkpoint_path: str,
         encoder_config_path: str = "",
@@ -30,6 +33,7 @@ class SDSLoss3DGS_StableSR(nn.Module):
         render_dir: str = "",
     ):
         super().__init__()
+        self.interpolation_type = interpolation_type
         self.device = torch.device("cuda:0")
         model_config = OmegaConf.load(model_config_path)
         self.model = load_model_from_config(model_config, model_checkpoint_path)
@@ -87,7 +91,7 @@ class SDSLoss3DGS_StableSR(nn.Module):
         render = F.interpolate(
             render,
             (height, width),
-            mode="bicubic",
+            mode=self.interpolation_type,
         ).clamp(-1.0, 1.0)
 
         render_latent = self.model.get_first_stage_encoding(
@@ -121,7 +125,7 @@ class SDSLoss3DGS_StableSR(nn.Module):
         condition_upscaled = F.interpolate(
             condition,
             (height, width),
-            mode="bicubic",
+            mode=self.interpolation_type,
         ).clamp(-1.0, 1.0)
         condition_upscaled_latent = self.model.get_first_stage_encoding(
             self.model.encode_first_stage(condition_upscaled)

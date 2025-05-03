@@ -4,33 +4,26 @@ import math
 import os
 import time
 import json
-from pathlib import Path
-from typing import Literal, Optional
 
 import numpy as np
 import torch
-import torch.nn.parameter
 import tyro
 from PIL import Image
-from torch import Tensor, optim
+from torch import Tensor
 
 from gsplat import rasterization, rasterization_2dgs
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Dict, Tuple
 from torchmetrics.image import PeakSignalNoiseRatio, StructuralSimilarityIndexMeasure
 import matplotlib.pyplot as plt
 import os
 import torch.nn.functional as F
-from diffusers import DiffusionPipeline
 from guidance import SDSLoss3DGS, SDILoss3DGS, SDSLoss3DGS_StableSR
-from torch.utils.data import Dataset, DataLoader
 import torchvision.transforms as transforms
-import torchvision.transforms.functional as VF
 from PIL import Image
 from configs import Config2D
 import tqdm
 from gsplat.strategy import DefaultStrategy
-from enum import Enum
 from fused_ssim import fused_ssim
 from utils import (
     set_linear_noise_schedule,
@@ -43,7 +36,9 @@ from StableSR.scripts.wavelet_color_fix import (
 )
 
 
-def process_image(image_path: str, image_shape: Tuple[int, int]) -> torch.Tensor:
+def process_image(
+    image_path: str, image_shape: Tuple[int, int], interpolation_type
+) -> torch.Tensor:
     image = Image.open(image_path)
     to_tensor = transforms.ToTensor()
     image = to_tensor(image)
@@ -51,7 +46,7 @@ def process_image(image_path: str, image_shape: Tuple[int, int]) -> torch.Tensor
         image = F.interpolate(
             image.unsqueeze(0),
             image_shape,
-            mode="bicubic",
+            mode=interpolation_type,
         ).clamp(0.0, 1.0)
     return image.squeeze(0)
 
@@ -71,14 +66,18 @@ class SimpleTrainer:
         self.device = torch.device("cuda:0")
         self.num_points = self.cfg.num_points
         self.training_img = process_image(
-            self.cfg.training_image_path, (self.cfg.height, self.cfg.width)
+            self.cfg.training_image_path,
+            (self.cfg.height, self.cfg.width),
+            self.cfg.interpolation_type,
         )
         self.height = self.training_img.size(1)
         self.width = self.training_img.size(2)
         self.render_width = int(self.width * self.cfg.scale_factor)
         self.render_height = int(self.height * self.cfg.scale_factor)
         self.validation_image = process_image(
-            self.cfg.validation_image_path, (self.render_height, self.render_width)
+            self.cfg.validation_image_path,
+            (self.render_height, self.render_width),
+            self.cfg.interpolation_type,
         )
 
         self.training_img = self.training_img.to(self.device)
@@ -119,6 +118,7 @@ class SimpleTrainer:
                 self.sds_loss = SDSLoss3DGS(prompt=self.cfg.prompt)
             elif self.cfg.sds_loss_type == "stable_sr_sds":
                 self.sds_loss = SDSLoss3DGS_StableSR(
+                    interpolation_type=self.cfg.interpolation_type,
                     model_checkpoint_path=self.cfg.stable_sr_checkpoint_path,
                     model_config_path=self.cfg.stable_sr_config_path,
                     # these are mainly for debugging
@@ -256,7 +256,7 @@ class SimpleTrainer:
                 F.interpolate(
                     self.training_img.unsqueeze(0),
                     (out_img.size(0), out_img.size(1)),
-                    mode="bicubic",
+                    mode=cfg.interpolation_type,
                 ),
             )
             out_img = out_img.squeeze(0).permute(1, 2, 0)
@@ -320,7 +320,7 @@ class SimpleTrainer:
                 downscaled_render = F.interpolate(
                     out_img.permute(2, 0, 1).unsqueeze(0),
                     resolution,
-                    mode="bicubic",
+                    mode=self.cfg.interpolation_type,
                 ).clamp(0.0, 1.0)
                 if cfg.classic_loss_type == "l1loss":
                     # we need to minimize

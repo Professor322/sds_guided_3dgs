@@ -79,7 +79,7 @@ def sds_experiments_2d(cfg: Config2D, default_run_args: List[str], opt):
     cfg.num_points = 10_000
     cfg.use_gaussian_sr = True
     cfg.scale_factor = 4
-    cfg.sds_loss_type = "stable_sr_sds"
+    cfg.sds_loss_type = "none"
     cfg.classic_loss_type = "l1loss"
     cfg.noise_scheduler_type = "annealing"
     # cfg.color_correction_mode = 'wavelet'
@@ -151,6 +151,8 @@ def sds_experiments_2d(cfg: Config2D, default_run_args: List[str], opt):
     current_run_args.append(f"--classic-loss-type {cfg.classic_loss_type}")
     result_dir += f"_color_cor_{cfg.color_correction_mode}"
     current_run_args.append(f"--color-correction-mode {cfg.color_correction_mode}")
+    result_dir += f"_inter_type_{cfg.interpolation_type}"
+    current_run_args.append(f"--interpolation-type {cfg.interpolation_type}")
     current_run_args.append(f"--lowres-noise-level {cfg.lowres_noise_level}")
     current_run_args.append(f"--results-dir {result_dir}")
     current_run_args.append(f"--min-noise-step {cfg.min_noise_step}")

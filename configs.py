@@ -277,6 +277,8 @@ class Config2D:
     # path to encoder checkpoint
     # mainly used for debugging
     encoder_checkpoint_path: str = "StableSR/vqgan_cfw_00011.ckpt"
+    # type of upscale used in intermediate operations
+    interpolation_type: Literal["bilinear", "bicubic", "sr"] = "bicubic"
 
 
 @dataclass

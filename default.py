@@ -208,13 +208,13 @@ class DefaultStrategy(Strategy):
                 state["radii"].zero_()
             torch.cuda.empty_cache()
 
-        if step % self.reset_every == 0:
-            reset_opa(
-                params=params,
-                optimizers=optimizers,
-                state=state,
-                value=self.prune_opa * 2.0,
-            )
+            if step % self.reset_every == 0:
+                reset_opa(
+                    params=params,
+                    optimizers=optimizers,
+                    state=state,
+                    value=self.prune_opa * 2.0,
+                )
 
     def _update_state(
         self,
