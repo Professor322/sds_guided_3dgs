@@ -240,6 +240,8 @@ class Config2D:
     noise_scheduler_type: Literal["collapsing", "linear", "annealing", "none"] = "none"
     # for densification process
     strategy: DefaultStrategy = field(default_factory=DefaultStrategy)
+    # when to stop pruninng or cloning splats
+    refine_stop_iter: int = 15_000
     # whether to use checkpoint for validation
     validate: bool = False
     # in altering fashion: one iteration of sds,
@@ -274,7 +276,7 @@ class Config2D:
     ] = "StableSR/stablesr_000117.ckpt"
     # path to encoder config
     # mainly used for debugging
-    encoder_configh_path: str = (
+    encoder_config_path: str = (
         "StableSR/configs/autoencoder/autoencoder_kl_64x64x4_resi.yaml"
     )
     # path to encoder checkpoint

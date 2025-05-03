@@ -76,13 +76,13 @@ def classic_splats_with_validation_2d(cfg: Config2D, default_run_args: List[str]
 
 def sds_experiments_2d(cfg: Config2D, default_run_args: List[str], opt):
     checkpopint_num = 29999
-    cfg.num_points = 10_000
     cfg.use_gaussian_sr = True
     cfg.scale_factor = 4
-    cfg.sds_loss_type = "none"
+    cfg.iterations = 5_000
+    cfg.refine_stop_iter = cfg.iterations // 2
+    cfg.sds_loss_type = "stable_sr_sds"
     cfg.classic_loss_type = "l1loss"
     cfg.noise_scheduler_type = "annealing"
-    # cfg.color_correction_mode = 'wavelet'
     cfg.noise_step_anealing = 100
     cfg.sds_lambda = 0.001
     cfg.use_strategy = True
@@ -95,22 +95,22 @@ def sds_experiments_2d(cfg: Config2D, default_run_args: List[str], opt):
     cfg.training_image_path = (
         f"data/360_v2/bicycle/images_{training_scale}/_DSC8679.JPG"
     )
+    # disable debugging
+    cfg.encoder_checkpoint_path = ""
+    cfg.encoder_config_path = ""
 
     current_run_args = default_run_args.copy()
 
+    current_run_args.append(f"--refine-stop-iter {cfg.refine_stop_iter}")
+    current_run_args.append(f"--encoder-checkpoint-path {cfg.encoder_checkpoint_path}")
+    current_run_args.append(f"--encoder-configh-path {cfg.encoder_config_path}")
     current_run_args.append(f"--validation-image-path {cfg.validation_image_path}")
     current_run_args.append(f"--training-image-path {cfg.training_image_path}")
     current_run_args.append(f"--iterations {cfg.iterations}")
 
-    checkpoint_path = f"results_2d_classic"
-    checkpoint_path += f"_num_points_{cfg.num_points}_{cfg.classic_loss_type}"
-    if (cfg.width, cfg.height) != (0, 0):
-        checkpoint_path += f"_{cfg.width}x{cfg.height}"
-    else:
-        checkpoint_path += "_original"
-    checkpoint_path += "_strategy"
-    checkpoint_path += f"_scale_{training_scale}"
-    checkpoint_path += f"/ckpts/ckpt_{checkpopint_num}.pt"
+    checkpoint_path = (
+        "results_2d_classic_num_points_10000_l1loss_original_strategy_scale_16"
+    )
     current_run_args.append(f"--ckpt-path {checkpoint_path}")
     result_dir = f"results_2d_low_res_noise_level_{str(cfg.lowres_noise_level).replace('.', '_')}"
     result_dir += f"_{checkpopint_num}_min{cfg.min_noise_step}_max{cfg.max_noise_step}"
@@ -153,6 +153,9 @@ def sds_experiments_2d(cfg: Config2D, default_run_args: List[str], opt):
     current_run_args.append(f"--color-correction-mode {cfg.color_correction_mode}")
     result_dir += f"_inter_type_{cfg.interpolation_type}"
     current_run_args.append(f"--interpolation-type {cfg.interpolation_type}")
+    result_dir += f"_ssim_lamda_{str(cfg.ssim_lambda).replace('.', '_')}"
+    current_run_args.append(f"--ssim-lambda {cfg.ssim_lambda}")
+
     current_run_args.append(f"--lowres-noise-level {cfg.lowres_noise_level}")
     current_run_args.append(f"--results-dir {result_dir}")
     current_run_args.append(f"--min-noise-step {cfg.min_noise_step}")
@@ -209,18 +212,20 @@ def main() -> None:
     if opt.top_psnr:
         result_dirs = glob.glob(f"{opt.dir}/results_2d_low*")
         print("Getting psnrs...")
+        save_steps = Config2D().save_steps
         psnrs_to_dirs = []
         for result_dir in result_dirs:
-            filename = f"{result_dir}/stats/step999.json"
-            if not os.path.exists(filename):
-                continue
-            with open(
-                filename,
-                "r",
-            ) as file:
-                data = file.read()
-                results = json.loads(data)
-                psnrs_to_dirs.append((results["psnr"], result_dir))
+            for save_step in save_steps:
+                filename = f"{result_dir}/stats/step{save_step - 1}.json"
+                if not os.path.exists(filename):
+                    continue
+                with open(
+                    filename,
+                    "r",
+                ) as file:
+                    data = file.read()
+                    results = json.loads(data)
+                    psnrs_to_dirs.append((results["psnr"], save_step, result_dir))
 
         psnrs_to_dirs = sorted(psnrs_to_dirs, reverse=True)
         for psnr_to_dir in psnrs_to_dirs:

@@ -58,7 +58,9 @@ class SimpleTrainer:
         self.cfg = cfg
         if self.cfg.use_strategy:
             self.cfg.strategy = DefaultStrategy(
-                verbose=True, dropout=self.cfg.densification_dropout
+                verbose=True,
+                dropout=self.cfg.densification_dropout,
+                refine_stop_iter=self.cfg.refine_stop_iter,
             )
             self.strategy_state = self.cfg.strategy.initialize_state()
         else:
@@ -123,7 +125,7 @@ class SimpleTrainer:
                     model_config_path=self.cfg.stable_sr_config_path,
                     # these are mainly for debugging
                     encoder_checkpoint_path=self.cfg.encoder_checkpoint_path,
-                    encoder_config_path=self.cfg.encoder_configh_path,
+                    encoder_config_path=self.cfg.encoder_config_path,
                     render_dir=self.render_dir,
                 )
 
