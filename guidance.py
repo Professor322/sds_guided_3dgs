@@ -147,18 +147,19 @@ class SDSLoss3DGS_StableSR(nn.Module):
         )
         # this is for debugging
         if self.decode_images_every > 0 and iteration % self.decode_images_every == 0:
-            _, enc_fea_lq = self.encoder.encode(condition)
-            x_samples = self.encoder.decode(
-                denoised_render_latent * 1.0 / self.model.scale_factor, enc_fea_lq
-            )
-            x_samples = torch.clamp((x_samples + 1.0) / 2.0, min=0.0, max=1.0)
-            for x_sample in x_samples:
-                x_sample = (
-                    255.0 * x_sample.permute(1, 2, 0).detach().cpu().numpy()
-                ).astype(np.uint8)
-                Image.fromarray(x_sample).save(
-                    f"{self.render_dir}/decoded_image_{iteration}.png"
+            with torch.no_grad():
+                _, enc_fea_lq = self.encoder.encode(condition_upscaled)
+                x_samples = self.encoder.decode(
+                    denoised_render_latent * 1.0 / self.model.scale_factor, enc_fea_lq
                 )
+                x_samples = torch.clamp((x_samples + 1.0) / 2.0, min=0.0, max=1.0)
+                for x_sample in x_samples:
+                    x_sample = (
+                        255.0 * x_sample.permute(1, 2, 0).detach().cpu().numpy()
+                    ).astype(np.uint8)
+                    Image.fromarray(x_sample).save(
+                        f"{self.render_dir}/decoded_image_{iteration}.png"
+                    )
 
         w = self.model.sqrt_one_minus_alphas_cumprod[t].view(-1, 1, 1, 1)
         loss_sds = (

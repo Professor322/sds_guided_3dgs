@@ -172,9 +172,7 @@ def sds_experiments_2d(cfg: Config2D, default_run_args: List[str], opt):
     return [result_dir]
 
 
-def main(
-    cfg: Config2D,
-) -> None:
+def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--debug", action="store_true", help="does a dry run of sbatch command"
@@ -185,19 +183,26 @@ def main(
         help="scans directory for results_2d* folders and checks psnr in checkpoints",
     )
     parser.add_argument("--dir", type=str, default=".", help="dir to check for psnr")
+    parser.add_argument(
+        "--sds-experiments", action="store_true", help="will perform sds experiments"
+    )
+    parser.add_argument(
+        "--classic-experiments",
+        action="store_true",
+        help="will perform classic experiments",
+    )
     opt = parser.parse_args()
-
-    do_sds_experiments = True
-    do_classic_experiments = False
 
     default_run_args = [
         "PYTHONPATH=$PYTHONPATH:./StableSR python3 -u trainer_2d.py",
     ]
     result_dirs = []
-    if do_sds_experiments:
-        result_dirs += sds_experiments_2d(cfg, default_run_args, opt)
-    if do_classic_experiments:
-        result_dirs += classic_splats_with_validation_2d(cfg, default_run_args, opt)
+    if opt.sds_experiments:
+        result_dirs += sds_experiments_2d(Config2D(), default_run_args, opt)
+    if opt.classic_experiments:
+        result_dirs += classic_splats_with_validation_2d(
+            Config2D(), default_run_args, opt
+        )
 
     if opt.top_psnr:
         result_dirs = glob.glob(f"{opt.dir}/results_2d_low*")
@@ -221,4 +226,4 @@ def main(
 
 
 if __name__ == "__main__":
-    main(cfg=Config2D())
+    main()
