@@ -74,19 +74,14 @@ def classic_splats_with_validation_2d(cfg: Config2D, default_run_args: List[str]
     return [result_dir]
 
 
-def sds_experiments_2d(cfg: Config2D, default_run_args: List[str], opt):
+def run_gaussian_sr_configuration(cfg: Config2D, default_run_args: List[str], opt):
     checkpopint_num = 29999
     cfg.use_gaussian_sr = True
     cfg.scale_factor = 4
     cfg.iterations = 5_000
     cfg.refine_stop_iter = 2_000
-    cfg.sds_loss_type = "stable_sr_sds"
-    cfg.classic_loss_type = "l1loss"
     cfg.noise_scheduler_type = "annealing"
     cfg.noise_step_anealing = 100
-    cfg.sds_lambda = 0.001
-    cfg.use_strategy = True
-    cfg.densification_dropout = 0.7
     training_scale = 16
     validation_scale = training_scale // cfg.scale_factor
     cfg.validation_image_path = (
@@ -102,15 +97,15 @@ def sds_experiments_2d(cfg: Config2D, default_run_args: List[str], opt):
     current_run_args = default_run_args.copy()
 
     current_run_args.append(f"--refine-stop-iter {cfg.refine_stop_iter}")
-    current_run_args.append(f"--encoder-checkpoint-path {cfg.encoder_checkpoint_path}")
-    current_run_args.append(f"--encoder-configh-path {cfg.encoder_config_path}")
+    current_run_args.append(
+        f'--encoder-checkpoint-path "{cfg.encoder_checkpoint_path}"'
+    )
+    current_run_args.append(f'--encoder-config-path "{cfg.encoder_config_path}"')
     current_run_args.append(f"--validation-image-path {cfg.validation_image_path}")
     current_run_args.append(f"--training-image-path {cfg.training_image_path}")
     current_run_args.append(f"--iterations {cfg.iterations}")
 
-    checkpoint_path = (
-        "results_2d_classic_num_points_10000_l1loss_original_strategy_scale_16"
-    )
+    checkpoint_path = f"results_2d_classic_num_points_10000_l1loss_original_strategy_scale_16/ckpts/ckpt_{checkpopint_num}.pt"
     current_run_args.append(f"--ckpt-path {checkpoint_path}")
     result_dir = f"results_2d"
     result_dir += f"_ckpt{checkpopint_num}"
@@ -177,6 +172,70 @@ def sds_experiments_2d(cfg: Config2D, default_run_args: List[str], opt):
     return [result_dir]
 
 
+def sds_experiments_2d(default_run_args: List[str], opt):
+    ssim_lambdas = [0.2, 1.0]
+    classic_loss_types = ["l1loss", "l2loss"]
+    densification_states = [False, True]
+    results_dirs = []
+
+    # tests without sds
+    # no dropout
+    for classic_loss_type in classic_loss_types:
+        for densification_state in densification_states:
+            if classic_loss_type == "l2loss":
+                config = Config2D(
+                    classic_loss_type=classic_loss_type,
+                    use_strategy=densification_state,
+                    densification_dropout=0.0,
+                    sds_loss_type="none",
+                )
+                results_dirs.extend(
+                    run_gaussian_sr_configuration(config, default_run_args, opt)
+                )
+            elif classic_loss_type == "l1loss":
+                for ssim_lambda in ssim_lambdas:
+                    config = Config2D(
+                        classic_loss_type=classic_loss_type,
+                        use_strategy=densification_state,
+                        densification_dropout=0.0,
+                        ssim_lambda=ssim_lambda,
+                        sds_loss_type="none",
+                    )
+                    results_dirs.extend(
+                        run_gaussian_sr_configuration(config, default_run_args, opt)
+                    )
+    sds_lambdas = [0.001, 0.0001]
+    for classic_loss_type in classic_loss_types:
+        for densification_state in densification_states:
+            for sds_lambda in sds_lambdas:
+                if classic_loss_type == "l2loss":
+                    config = Config2D(
+                        classic_loss_type=classic_loss_type,
+                        use_strategy=densification_state,
+                        densification_dropout=0.0,
+                        sds_loss_type="stable_sr_sds",
+                        sds_lambda=sds_lambda,
+                    )
+                    results_dirs.extend(
+                        run_gaussian_sr_configuration(config, default_run_args, opt)
+                    )
+                elif classic_loss_type == "l1loss":
+                    for ssim_lambda in ssim_lambdas:
+                        config = Config2D(
+                            classic_loss_type=classic_loss_type,
+                            use_strategy=densification_state,
+                            densification_dropout=0.0,
+                            ssim_lambda=ssim_lambda,
+                            sds_loss_type="stable_sr_sds",
+                            sds_lambda=sds_lambda,
+                        )
+                        results_dirs.extend(
+                            run_gaussian_sr_configuration(config, default_run_args, opt)
+                        )
+    print(f"Started {len(results_dirs)} tests")
+    return results_dirs
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -203,7 +262,7 @@ def main() -> None:
     ]
     result_dirs = []
     if opt.sds_experiments:
-        result_dirs += sds_experiments_2d(Config2D(), default_run_args, opt)
+        result_dirs += sds_experiments_2d(default_run_args, opt)
     if opt.classic_experiments:
         result_dirs += classic_splats_with_validation_2d(
             Config2D(), default_run_args, opt
