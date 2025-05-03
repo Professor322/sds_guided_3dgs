@@ -264,11 +264,14 @@ class Config2D:
     # color correction mode
     color_correction_mode: Literal["adain", "wavelet", "none"] = "none"
     # path to StableSR config
-    stable_sr_config_path: str = (
-        "StableSR/configs/stableSRNew/v2-finetune_text_T_512.yaml"
-    )
+    stable_sr_config_path: Literal[
+        "StableSR/configs/stableSRNew/v2-finetune_text_T_512.yaml",
+        "StableSR/configs/stableSRNew/v2-finetune_text_T_768v.yaml",
+    ] = "StableSR/configs/stableSRNew/v2-finetune_text_T_512.yaml"
     # path to StableSR checkpoint
-    stable_sr_checkpoint_path: str = "StableSR/stablesr_000117.ckpt"
+    stable_sr_checkpoint_path: Literal[
+        "StableSR/stablesr_000117.ckpt", "StableSR/stablesr_768v_000139.ckpt"
+    ] = "StableSR/stablesr_000117.ckpt"
     # path to encoder config
     # mainly used for debugging
     encoder_configh_path: str = (
@@ -277,8 +280,8 @@ class Config2D:
     # path to encoder checkpoint
     # mainly used for debugging
     encoder_checkpoint_path: str = "StableSR/vqgan_cfw_00011.ckpt"
-    # type of upscale used in intermediate operations
-    interpolation_type: Literal["bilinear", "bicubic", "sr"] = "bicubic"
+    # type of interpolation used in intermediate operations
+    interpolation_type: Literal["bilinear", "bicubic"] = "bicubic"
 
 
 @dataclass
