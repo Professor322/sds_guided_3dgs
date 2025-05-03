@@ -123,6 +123,10 @@ class SimpleTrainer:
                 self.sds_loss = SDSLoss3DGS_StableSR(
                     model_checkpoint_path=self.cfg.stable_sr_checkpoint_path,
                     model_config_path=self.cfg.stable_sr_config_path,
+                    # these are mainly for debugging
+                    encoder_checkpoint_path=self.cfg.encoder_checkpoint_path,
+                    encoder_config_path=self.cfg.encoder_configh_path,
+                    render_dir=self.render_dir,
                 )
 
         if self.cfg.classic_loss_type == "l2loss":
@@ -379,6 +383,7 @@ class SimpleTrainer:
                             condition=self.training_img.unsqueeze(0),
                             min_noise_step=min_step,
                             max_noise_step=max_step,
+                            iteration=i,
                         ).squeeze()
 
                 loss += sds * self.cfg.sds_lambda

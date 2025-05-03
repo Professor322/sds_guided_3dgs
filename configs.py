@@ -269,6 +269,14 @@ class Config2D:
     )
     # path to StableSR checkpoint
     stable_sr_checkpoint_path: str = "StableSR/stablesr_000117.ckpt"
+    # path to encoder config
+    # mainly used for debugging
+    encoder_configh_path: str = (
+        "StableSR/configs/autoencoder/autoencoder_kl_64x64x4_resi.yaml"
+    )
+    # path to encoder checkpoint
+    # mainly used for debugging
+    encoder_checkpoint_path: str = "StableSR/vqgan_cfw_00011.ckpt"
 
 
 @dataclass
