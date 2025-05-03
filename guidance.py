@@ -87,10 +87,8 @@ class SDSLoss3DGS_StableSR(nn.Module):
         render = F.interpolate(
             render,
             (height, width),
-            mode="bilinear",
-            align_corners=False,
-            antialias=True,
-        )
+            mode="bicubic",
+        ).clamp(-1.0, 1.0)
 
         render_latent = self.model.get_first_stage_encoding(
             self.model.encode_first_stage(render)
@@ -123,10 +121,8 @@ class SDSLoss3DGS_StableSR(nn.Module):
         condition_upscaled = F.interpolate(
             condition,
             (height, width),
-            mode="bilinear",
-            align_corners=False,
-            antialias=True,
-        )
+            mode="bicubic",
+        ).clamp(-1.0, 1.0)
         condition_upscaled_latent = self.model.get_first_stage_encoding(
             self.model.encode_first_stage(condition_upscaled)
         )

@@ -51,10 +51,8 @@ def process_image(image_path: str, image_shape: Tuple[int, int]) -> torch.Tensor
         image = F.interpolate(
             image.unsqueeze(0),
             image_shape,
-            mode="bilinear",
-            align_corners=False,
-            antialias=True,
-        )
+            mode="bicubic",
+        ).clamp(0.0, 1.0)
     return image.squeeze(0)
 
 
@@ -258,7 +256,7 @@ class SimpleTrainer:
                 F.interpolate(
                     self.training_img.unsqueeze(0),
                     (out_img.size(0), out_img.size(1)),
-                    mode="bilinear",
+                    mode="bicubic",
                 ),
             )
             out_img = out_img.squeeze(0).permute(1, 2, 0)
@@ -322,10 +320,8 @@ class SimpleTrainer:
                 downscaled_render = F.interpolate(
                     out_img.permute(2, 0, 1).unsqueeze(0),
                     resolution,
-                    mode="bilinear",
-                    align_corners=False,
-                    antialias=True,
-                )
+                    mode="bicubic",
+                ).clamp(0.0, 1.0)
                 if cfg.classic_loss_type == "l1loss":
                     # we need to minimize
                     # this one wants [B, C, H, W]
@@ -385,7 +381,6 @@ class SimpleTrainer:
                             max_noise_step=max_step,
                             iteration=i,
                         ).squeeze()
-
                 loss += sds * self.cfg.sds_lambda
 
             else:
