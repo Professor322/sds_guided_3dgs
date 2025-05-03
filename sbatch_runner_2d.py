@@ -79,7 +79,7 @@ def sds_experiments_2d(cfg: Config2D, default_run_args: List[str], opt):
     cfg.use_gaussian_sr = True
     cfg.scale_factor = 4
     cfg.iterations = 5_000
-    cfg.refine_stop_iter = cfg.iterations // 2
+    cfg.refine_stop_iter = 2_000
     cfg.sds_loss_type = "stable_sr_sds"
     cfg.classic_loss_type = "l1loss"
     cfg.noise_scheduler_type = "annealing"
@@ -112,26 +112,29 @@ def sds_experiments_2d(cfg: Config2D, default_run_args: List[str], opt):
         "results_2d_classic_num_points_10000_l1loss_original_strategy_scale_16"
     )
     current_run_args.append(f"--ckpt-path {checkpoint_path}")
-    result_dir = f"results_2d_low_res_noise_level_{str(cfg.lowres_noise_level).replace('.', '_')}"
-    result_dir += f"_{checkpopint_num}_min{cfg.min_noise_step}_max{cfg.max_noise_step}"
+    result_dir = f"results_2d"
+    result_dir += f"_ckpt{checkpopint_num}"
     if cfg.use_gaussian_sr:
         result_dir += f"_gaussian_sr"
         current_run_args.append(f"--use-gaussian-sr")
         if cfg.sds_loss_type != "none":
-            if cfg.sds_lambda > 0.0:
-                result_dir += f"_lambda_{str(cfg.sds_lambda).replace('.', '_')}"
-                current_run_args.append(f"--sds-lambda {cfg.sds_lambda}")
             result_dir += f"_{cfg.noise_scheduler_type}"
             current_run_args.append(
                 f"--noise-scheduler-type {cfg.noise_scheduler_type}"
             )
-            result_dir += f"_{cfg.sds_loss_type}"
-            current_run_args.append(f"--sds-loss-type {cfg.sds_loss_type}")
             if cfg.noise_step_anealing > 0 and cfg.noise_scheduler_type == "annealing":
-                result_dir += f"_{cfg.noise_step_anealing}"
+                result_dir += f"{cfg.noise_step_anealing}"
                 current_run_args.append(
                     f"--noise-step-anealing {cfg.noise_step_anealing}"
                 )
+            result_dir += f"_{cfg.sds_loss_type}"
+            current_run_args.append(f"--sds-loss-type {cfg.sds_loss_type}")
+            if cfg.sds_lambda > 0.0:
+                result_dir += f"_lambda{str(cfg.sds_lambda).replace('.', '_')}"
+                current_run_args.append(f"--sds-lambda {cfg.sds_lambda}")
+            result_dir += f"_min{cfg.min_noise_step}_max{cfg.max_noise_step}"
+            current_run_args.append(f"--min-noise-step {cfg.min_noise_step}")
+            current_run_args.append(f"--max-noise-step {cfg.max_noise_step}")
 
     if cfg.grad_clipping > 0.0:
         result_dir += f"_grad_clip_{str(cfg.grad_clipping).replace('.', '_')}"
@@ -140,27 +143,24 @@ def sds_experiments_2d(cfg: Config2D, default_run_args: List[str], opt):
         result_dir += "_strategy"
         current_run_args.append(f"--use-strategy")
         if cfg.densification_dropout > 0:
-            result_dir += (
-                f"_dens_dropout_{str(cfg.densification_dropout).replace('.', '_')}"
-            )
+            result_dir += f"_dropout{str(cfg.densification_dropout).replace('.', '_')}"
             current_run_args.append(
                 f"--densification-dropout {cfg.densification_dropout}"
             )
 
     result_dir += f"_{cfg.classic_loss_type}"
     current_run_args.append(f"--classic-loss-type {cfg.classic_loss_type}")
-    result_dir += f"_color_cor_{cfg.color_correction_mode}"
-    current_run_args.append(f"--color-correction-mode {cfg.color_correction_mode}")
-    result_dir += f"_inter_type_{cfg.interpolation_type}"
+    # ssim only used in l1loss
+    if cfg.classic_loss_type == "l1loss":
+        result_dir += f"_ssim_lambda{str(cfg.ssim_lambda).replace('.', '_')}"
+        current_run_args.append(f"--ssim-lambda {cfg.ssim_lambda}")
+    result_dir += f"_inter_{cfg.interpolation_type}"
     current_run_args.append(f"--interpolation-type {cfg.interpolation_type}")
-    result_dir += f"_ssim_lamda_{str(cfg.ssim_lambda).replace('.', '_')}"
-    current_run_args.append(f"--ssim-lambda {cfg.ssim_lambda}")
-
     current_run_args.append(f"--lowres-noise-level {cfg.lowres_noise_level}")
+    if cfg.use_gaussian_sr:
+        current_run_args.append(f"--scale-factor {cfg.scale_factor}")
+        result_dir += f"_scale{cfg.scale_factor}"
     current_run_args.append(f"--results-dir {result_dir}")
-    current_run_args.append(f"--min-noise-step {cfg.min_noise_step}")
-    current_run_args.append(f"--max-noise-step {cfg.max_noise_step}")
-    current_run_args.append(f"--scale-factor {cfg.scale_factor}")
     if (cfg.width, cfg.height) != (0, 0):
         current_run_args.append(f"--width {cfg.width}")
         current_run_args.append(f"--height {cfg.height}")
