@@ -133,7 +133,9 @@ class Config3D:
     # Scale factor to enhance gaussian splats
     scale_factor: float = 0.0
     # Type of Score Disitllation Sampling loss
-    sds_loss_type: Literal["sdi", "sds", "none"] = "none"
+    sds_loss_type: Literal[
+        "deepfloyd_sdi", "deepfloyd_sds", "stablesr", "none"
+    ] = "none"
     # Controls influence of Score Distillation Sampling
     sds_lambda: float = 0.001
     # prompt for diffussion model
@@ -149,17 +151,38 @@ class Config3D:
     # guidance scale for denoising process
     guidance_scale: float = 10.0
     # annealing coefficient for "annealing" type of noise scheduler
-    noise_step_annealing: int = 100
+    noise_step_annealing: int = 0
     # dropout of splats during densification process
     # applicable right now only to default strategy
-    densification_dropout: float = 0.7
+    densification_dropout: float = 0.0
     # general loss type, gaussian sr uses l2 loss in their paper
     # without any D-SSIM coefficients
     loss_type: Literal["l2loss", "l1loss"] = "l1loss"
     # upscale suffix for validation and training
-    upscale_suffix: Literal["bilinear", "bicubic", "sr", ""] = ""
+    upscale_suffix: Literal["bilinear", "bicubic", "deepfloyd", "stablesr", ""] = ""
     # maximum allowed number of splats
     max_splats: int = 1_000_000
+    # color correction mode
+    color_correction_mode: Literal["adain", "wavelet", "none"] = "none"
+    # path to StableSR config
+    stable_sr_config_path: Literal[
+        "StableSR/configs/stableSRNew/v2-finetune_text_T_512.yaml",
+        "StableSR/configs/stableSRNew/v2-finetune_text_T_768v.yaml",
+    ] = "StableSR/configs/stableSRNew/v2-finetune_text_T_512.yaml"
+    # path to StableSR checkpoint
+    stable_sr_checkpoint_path: Literal[
+        "StableSR/stablesr_000117.ckpt", "StableSR/stablesr_768v_000139.ckpt"
+    ] = "StableSR/stablesr_000117.ckpt"
+    # path to encoder config
+    # mainly used for debugging
+    encoder_config_path: str = (
+        "StableSR/configs/autoencoder/autoencoder_kl_64x64x4_resi.yaml"
+    )
+    # path to encoder checkpoint
+    # mainly used for debugging
+    encoder_checkpoint_path: str = "StableSR/vqgan_cfw_00011.ckpt"
+    # type of interpolation used in intermediate operations
+    interpolation_type: Literal["bilinear", "bicubic"] = "bicubic"
 
     def adjust_steps(self, factor: float):
         self.eval_steps = [int(i * factor) for i in self.eval_steps]

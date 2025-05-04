@@ -53,7 +53,7 @@ from gsplat.strategy import DefaultStrategy, MCMCStrategy
 
 # from gsplat.optimizers import SelectiveAdam
 
-from guidance import SDILoss3DGS, SDSLoss3DGS
+from guidance import SDILoss3DGS, SDSLoss3DGS, SDSLoss3DGS_StableSR
 from configs import Config3D
 
 
@@ -304,10 +304,20 @@ class Runner:
             )
             self.valset = Dataset(self.val_parser, split="val")
             # initialize SDS loss
-            if self.cfg.sds_loss_type == "sdi":
+            if self.cfg.sds_loss_type == "deepfloyd_sdi":
                 self.sds_loss = SDILoss3DGS(prompt=self.cfg.prompt)
-            elif self.cfg.sds_loss_type == "sds":
+            elif self.cfg.sds_loss_type == "deepfloyd_sds":
                 self.sds_loss = SDSLoss3DGS(prompt=self.cfg.prompt)
+            elif self.cfg.sds_loss_type == "stablesr":
+                self.sds_loss = SDSLoss3DGS_StableSR(
+                    interpolation_type=self.cfg.interpolation_type,
+                    model_checkpoint_path=self.cfg.stable_sr_checkpoint_path,
+                    model_config_path=self.cfg.stable_sr_config_path,
+                    # these are for debugging
+                    encoder_checkpoint_path=self.cfg.encoder_checkpoint_path,
+                    encoder_config_path=self.cfg.encoder_config_path,
+                    render_dir=self.render_dir,
+                )
 
             # Set noise schedule if needed
             if self.cfg.noise_scheduler_type == "linear":
@@ -705,21 +715,31 @@ class Runner:
                     min_step = self.cfg.min_noise_step
                     max_step = self.cfg.max_noise_step
 
-                sds_loss = (
-                    self.sds_loss(
-                        images=upscaled_colors.permute(0, 3, 1, 2),
-                        original=pixels.permute(0, 3, 1, 2),
-                        min_step=min_step,
-                        max_step=max_step,
-                        lowres_noise_level=self.cfg.condition_noise,
-                        scheduler_timestep=self.noise_scheduler[step]
-                        if self.cfg.noise_scheduler_type == "linear"
-                        else None,
-                        downscale_condition=False,
-                        guidance_scale=cfg.guidance_scale,
+                if self.cfg.sds_loss_type in ("deepfloyd_sds", "deepfloyd_sdi"):
+                    sds_loss = (
+                        self.sds_loss(
+                            images=upscaled_colors.permute(0, 3, 1, 2),
+                            original=pixels.permute(0, 3, 1, 2),
+                            min_step=min_step,
+                            max_step=max_step,
+                            lowres_noise_level=self.cfg.condition_noise,
+                            scheduler_timestep=self.noise_scheduler[step]
+                            if self.cfg.noise_scheduler_type == "linear"
+                            else None,
+                            downscale_condition=False,
+                            guidance_scale=cfg.guidance_scale,
+                        )
+                        * self.cfg.sds_lambda
                     )
-                    * self.cfg.sds_lambda
-                )
+                elif self.cfg.sds_loss_type == "stablesr":
+                    sds_loss = self.sds_loss(
+                        render=upscaled_colors.permute(0, 3, 1, 2),
+                        condition=pixels.permute(0, 3, 1, 2),
+                        min_noise_step=min_step,
+                        max_noise_step=max_step,
+                        iteration=step,
+                    )
+
                 loss += sds_loss.squeeze()
 
             loss.backward()
