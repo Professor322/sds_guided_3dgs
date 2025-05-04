@@ -82,7 +82,7 @@ def main(cfg: DatasetAugmentationConfig) -> None:
         model.ori_timesteps.sort()
         model = model.to(device)
         vqgan_config = OmegaConf.load(cfg.encoder_config_path)
-        encoder = load_model_from_config(vqgan_config, cfg.encoder_config_path)
+        encoder = load_model_from_config(vqgan_config, cfg.encoder_checkpoint_path)
         encoder = encoder.to(device)
         encoder.decoder.fusion_w = 0.5
         text_init = [""]
@@ -129,7 +129,7 @@ def main(cfg: DatasetAugmentationConfig) -> None:
                 batch_size = 1
                 tile_size = 64
                 tile_overlap = 32
-                image_loaded = transform(image_loaded) * 2 - 1
+                image_loaded = (transform(image_loaded) * 2 - 1).unsqueeze(0)
                 # need to be a multiple of tile_overlap
                 height, width = image_loaded.size(2), image_loaded.size(3)
                 height, width = (
