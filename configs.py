@@ -288,9 +288,34 @@ class Config2D:
 
 @dataclass
 class DatasetAugmentationConfig:
+    # data directory
     data_dir: str = "./data/360_v2/my_bicycle"
+    # base image to upscale from
     data_factor: int = 4
-    upscale_type: Literal["bilinear", "bicubic", "sr"] = "bicubic"
+    # type of upscale to perform
+    upscale_type: Literal["bilinear", "bicubic", "deepfloyd", "stablesr"] = "bicubic"
+    # by how much to upscale the image
     scale_factor: int = 4
+    # prompt for deepfloyd model
     prompt: str = ""
+    # noise applied to condition image in case of deepfloyd model
     condtion_noise_level_steps: int = 50
+    # path to StableSR config
+    stable_sr_config_path: Literal[
+        "StableSR/configs/stableSRNew/v2-finetune_text_T_512.yaml",
+        "StableSR/configs/stableSRNew/v2-finetune_text_T_768v.yaml",
+    ] = "StableSR/configs/stableSRNew/v2-finetune_text_T_512.yaml"
+    # path to StableSR checkpoint
+    stable_sr_checkpoint_path: Literal[
+        "StableSR/stablesr_000117.ckpt", "StableSR/stablesr_768v_000139.ckpt"
+    ] = "StableSR/stablesr_000117.ckpt"
+    # path to encoder config
+    # mainly used for debugging
+    encoder_config_path: str = (
+        "StableSR/configs/autoencoder/autoencoder_kl_64x64x4_resi.yaml"
+    )
+    # path to encoder checkpoint
+    # mainly used for debugging
+    encoder_checkpoint_path: str = "StableSR/vqgan_cfw_00011.ckpt"
+    # number of denoising steps for stablesr to make
+    denoising_steps: int = 200

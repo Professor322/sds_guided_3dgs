@@ -212,7 +212,7 @@ def sds_experiments_2d(default_run_args: List[str], opt):
                     config = Config2D(
                         classic_loss_type=classic_loss_type,
                         use_strategy=densification_state,
-                        densification_dropout=0.0,
+                        densification_dropout=0.7,
                         sds_loss_type="stable_sr_sds",
                         sds_lambda=sds_lambda,
                     )
@@ -224,7 +224,7 @@ def sds_experiments_2d(default_run_args: List[str], opt):
                         config = Config2D(
                             classic_loss_type=classic_loss_type,
                             use_strategy=densification_state,
-                            densification_dropout=0.0,
+                            densification_dropout=0.7,
                             ssim_lambda=ssim_lambda,
                             sds_loss_type="stable_sr_sds",
                             sds_lambda=sds_lambda,
