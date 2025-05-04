@@ -137,6 +137,9 @@ def run_gaussian_sr_configuration(cfg: Config2D, default_run_args: List[str], op
     if cfg.use_strategy:
         result_dir += "_strategy"
         current_run_args.append(f"--use-strategy")
+        if cfg.sds_loss_type != "none" and cfg.densification_skip_sds_grad:
+            result_dir += "_skip_sds_grad"
+            current_run_args.append(f"--densification-skip-sds-grad")
         if cfg.densification_dropout > 0:
             result_dir += f"_dropout{str(cfg.densification_dropout).replace('.', '_')}"
             current_run_args.append(
@@ -173,38 +176,42 @@ def run_gaussian_sr_configuration(cfg: Config2D, default_run_args: List[str], op
 
 
 def sds_experiments_2d(default_run_args: List[str], opt):
-    ssim_lambdas = [0.2, 1.0]
-    classic_loss_types = ["l1loss", "l2loss"]
-    densification_states = [False, True]
+    # ssim_lambdas = [0.2, 1.0]
+    ssim_lambdas = [1.0]
+    # classic_loss_types = ["l1loss", "l2loss"]
+    classic_loss_types = ["l1loss"]
+    # densification_states = [False, True]
+    densification_states = [True]
     results_dirs = []
 
     # tests without sds
     # no dropout
-    for classic_loss_type in classic_loss_types:
-        for densification_state in densification_states:
-            if classic_loss_type == "l2loss":
-                config = Config2D(
-                    classic_loss_type=classic_loss_type,
-                    use_strategy=densification_state,
-                    densification_dropout=0.0,
-                    sds_loss_type="none",
-                )
-                results_dirs.extend(
-                    run_gaussian_sr_configuration(config, default_run_args, opt)
-                )
-            elif classic_loss_type == "l1loss":
-                for ssim_lambda in ssim_lambdas:
-                    config = Config2D(
-                        classic_loss_type=classic_loss_type,
-                        use_strategy=densification_state,
-                        densification_dropout=0.0,
-                        ssim_lambda=ssim_lambda,
-                        sds_loss_type="none",
-                    )
-                    results_dirs.extend(
-                        run_gaussian_sr_configuration(config, default_run_args, opt)
-                    )
-    sds_lambdas = [0.001, 0.0001]
+    # for classic_loss_type in classic_loss_types:
+    #     for densification_state in densification_states:
+    #         if classic_loss_type == "l2loss":
+    #             config = Config2D(
+    #                 classic_loss_type=classic_loss_type,
+    #                 use_strategy=densification_state,
+    #                 densification_dropout=0.0,
+    #                 sds_loss_type="none",
+    #             )
+    #             results_dirs.extend(
+    #                 run_gaussian_sr_configuration(config, default_run_args, opt)
+    #             )
+    #         elif classic_loss_type == "l1loss":
+    #             for ssim_lambda in ssim_lambdas:
+    #                 config = Config2D(
+    #                     classic_loss_type=classic_loss_type,
+    #                     use_strategy=densification_state,
+    #                     densification_dropout=0.0,
+    #                     ssim_lambda=ssim_lambda,
+    #                     sds_loss_type="none",
+    #                 )
+    #                 results_dirs.extend(
+    #                     run_gaussian_sr_configuration(config, default_run_args, opt)
+    #                 )
+    # sds_lambdas = [0.001, 0.0001]
+    sds_lambdas = [0.0001]
     for classic_loss_type in classic_loss_types:
         for densification_state in densification_states:
             for sds_lambda in sds_lambdas:
@@ -224,10 +231,11 @@ def sds_experiments_2d(default_run_args: List[str], opt):
                         config = Config2D(
                             classic_loss_type=classic_loss_type,
                             use_strategy=densification_state,
-                            densification_dropout=0.7,
+                            densification_dropout=0.0,
                             ssim_lambda=ssim_lambda,
                             sds_loss_type="stable_sr_sds",
                             sds_lambda=sds_lambda,
+                            densification_skip_sds_grad=True,
                         )
                         results_dirs.extend(
                             run_gaussian_sr_configuration(config, default_run_args, opt)

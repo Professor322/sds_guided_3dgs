@@ -267,9 +267,6 @@ class Config2D:
     refine_stop_iter: int = 15_000
     # whether to use checkpoint for validation
     validate: bool = False
-    # in altering fashion: one iteration of sds,
-    # then one iteration of mse
-    use_altering_loss: bool = False
     # this is to track if parameters are being changed
     debug_training: bool = False
     # gradient clipping option 0.0 - means disabled
@@ -286,6 +283,8 @@ class Config2D:
     # splat dropout during during default
     # densification process
     densification_dropout: float = 0.0
+    # do not use sds gradients for densification
+    densification_skip_sds_grad: bool = False
     # color correction mode
     color_correction_mode: Literal["adain", "wavelet", "none"] = "none"
     # path to StableSR config

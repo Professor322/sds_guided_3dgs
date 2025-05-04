@@ -280,6 +280,52 @@ class SimpleTrainer:
             with open(f"{self.stats_dir}/val_{iteration}.json", "w") as f:
                 json.dump({"psnr": psnr.item(), "ssim": ssim.item()}, f)
 
+    def compute_sds(self, out_img: Tensor, step: int):
+        sds = 0.0
+        if self.cfg.sds_loss_type != "none":
+            if self.cfg.noise_scheduler_type == "collapsing":
+                min_step = compute_collapsing_noise_step(
+                    200, 300, step / self.cfg.iterations
+                )
+                max_step = compute_collapsing_noise_step(
+                    500, 980, step / self.cfg.iterations
+                )
+            elif self.cfg.noise_scheduler_type == "annealing":
+                assert self.cfg.noise_step_anealing > 0
+                min_step = int(
+                    max(
+                        self.cfg.min_noise_step,
+                        (self.cfg.max_noise_step - 1)
+                        - step / self.cfg.noise_step_anealing,
+                    )
+                )
+                max_step = self.cfg.max_noise_step
+            else:
+                min_step = self.cfg.min_noise_step
+                max_step = self.cfg.max_noise_step
+            if self.cfg.sds_loss_type in ("deepfloyd_sds", "deepfloyd_sdi"):
+                sds = self.sds_loss(
+                    images=out_img.permute(2, 0, 1).unsqueeze(0),
+                    original=self.training_img.unsqueeze(0),
+                    min_step=min_step,
+                    max_step=max_step,
+                    lowres_noise_level=self.cfg.lowres_noise_level,
+                    scheduler_timestep=self.noise_scheduler[i]
+                    if self.cfg.noise_scheduler_type == "linear"
+                    else None,
+                    downscale_condition=False,
+                    guidance_scale=cfg.guidance_scale,
+                ).squeeze()
+            elif self.cfg.sds_loss_type == "stable_sr_sds":
+                sds = self.sds_loss(
+                    render=out_img.permute(2, 0, 1).unsqueeze(0),
+                    condition=self.training_img.unsqueeze(0),
+                    min_noise_step=min_step,
+                    max_noise_step=max_step,
+                    iteration=step,
+                ).squeeze()
+        return sds * cfg.sds_lambda
+
     def train(self):
         times = [0] * 2  # rasterization, backward
 
@@ -340,50 +386,8 @@ class SimpleTrainer:
                     loss = self.mse_loss(
                         downscaled_render, self.training_img.unsqueeze(0)
                     )
-                sds = 0.0
-                if self.cfg.sds_loss_type != "none":
-                    if self.cfg.noise_scheduler_type == "collapsing":
-                        min_step = compute_collapsing_noise_step(
-                            200, 300, i / self.cfg.iterations
-                        )
-                        max_step = compute_collapsing_noise_step(
-                            500, 980, i / self.cfg.iterations
-                        )
-                    elif self.cfg.noise_scheduler_type == "annealing":
-                        assert self.cfg.noise_step_anealing > 0
-                        min_step = int(
-                            max(
-                                self.cfg.min_noise_step,
-                                (self.cfg.max_noise_step - 1)
-                                - i / self.cfg.noise_step_anealing,
-                            )
-                        )
-                        max_step = self.cfg.max_noise_step
-                    else:
-                        min_step = self.cfg.min_noise_step
-                        max_step = self.cfg.max_noise_step
-                    if self.cfg.sds_loss_type in ("deepfloyd_sds", "deepfloyd_sdi"):
-                        sds = self.sds_loss(
-                            images=out_img.permute(2, 0, 1).unsqueeze(0),
-                            original=self.training_img.unsqueeze(0),
-                            min_step=min_step,
-                            max_step=max_step,
-                            lowres_noise_level=self.cfg.lowres_noise_level,
-                            scheduler_timestep=self.noise_scheduler[i]
-                            if self.cfg.noise_scheduler_type == "linear"
-                            else None,
-                            downscale_condition=False,
-                            guidance_scale=cfg.guidance_scale,
-                        ).squeeze()
-                    elif self.cfg.sds_loss_type == "stable_sr_sds":
-                        sds = self.sds_loss(
-                            render=out_img.permute(2, 0, 1).unsqueeze(0),
-                            condition=self.training_img.unsqueeze(0),
-                            min_noise_step=min_step,
-                            max_noise_step=max_step,
-                            iteration=i,
-                        ).squeeze()
-                loss += sds * self.cfg.sds_lambda
+                if not self.cfg.densification_skip_sds_grad:
+                    loss += self.compute_sds(out_img=out_img, step=i)
 
             else:
                 if cfg.classic_loss_type == "l1loss":
@@ -419,6 +423,14 @@ class SimpleTrainer:
                 self.cfg.strategy.step_post_backward(
                     self.splats, self.optimizers, self.strategy_state, i, info
                 )
+            # do backward through sds seperately to avoid disturbing the densification process
+            if (
+                self.cfg.use_gaussian_sr
+                and self.cfg.sds_loss_type != "none"
+                and self.cfg.densification_skip_sds_grad
+            ):
+                sds_loss = self.compute_sds(out_img=out_img, step=i)
+                sds_loss.backward()
 
             # this one wants [H, W, C]
             psnr = self.psnr(out_img, self.validation_image.permute(1, 2, 0))

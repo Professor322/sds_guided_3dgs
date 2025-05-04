@@ -65,6 +65,7 @@ class SDSLoss3DGS_StableSR(nn.Module):
             self.render_dir = render_dir
             print("Warning: decoding of the samples enabled")
 
+    @torch.autocast(device_type="cuda")
     def forward(
         self,
         render: torch.Tensor,
