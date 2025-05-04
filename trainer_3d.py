@@ -732,12 +732,15 @@ class Runner:
                         * self.cfg.sds_lambda
                     )
                 elif self.cfg.sds_loss_type == "stablesr":
-                    sds_loss = self.sds_loss(
-                        render=upscaled_colors.permute(0, 3, 1, 2),
-                        condition=pixels.permute(0, 3, 1, 2),
-                        min_noise_step=min_step,
-                        max_noise_step=max_step,
-                        iteration=step,
+                    sds_loss = (
+                        self.sds_loss(
+                            render=upscaled_colors.permute(0, 3, 1, 2),
+                            condition=pixels.permute(0, 3, 1, 2),
+                            min_noise_step=min_step,
+                            max_noise_step=max_step,
+                            iteration=step,
+                        )
+                        * self.cfg.sds_lambda
                     )
 
                 loss += sds_loss.squeeze()

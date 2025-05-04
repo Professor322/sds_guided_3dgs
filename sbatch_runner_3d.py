@@ -35,6 +35,8 @@ def run_classic_configuration_with_validation_3d(
     if isinstance(cfg.strategy, MCMCStrategy):
         cfg.result_dir += "_mcmc"
         current_run_args.append("mcmc")
+        cfg.result_dir += f"_max_splats{cfg.max_splats}"
+        current_run_args.append(f"--max-splats {cfg.max_splats}")
     else:
         cfg.result_dir += "_default"
         current_run_args.append("default")
@@ -142,6 +144,8 @@ def run_gaussian_sr_configuration(cfg: Config3D, default_run_args: List[str], op
         if cfg.sds_loss_type != "none":
             current_run_args.append(f"--sds-loss-type {cfg.sds_loss_type}")
             cfg.result_dir += f"_{cfg.sds_loss_type}"
+            current_run_args.append(f"--sds-lambda {cfg.sds_lambda}")
+            cfg.result_dir += f"{str(cfg.sds_lambda).replace('.', '_')}"
             current_run_args.append(f"--interpolation-type {cfg.interpolation_type}")
             # noise scheduling only makes sense when sds loss is enabled
             if cfg.noise_scheduler_type != "none":
@@ -149,6 +153,11 @@ def run_gaussian_sr_configuration(cfg: Config3D, default_run_args: List[str], op
                     f"--noise-scheduler-type {cfg.noise_scheduler_type}"
                 )
                 cfg.result_dir += f"_noise_scheduler_{cfg.noise_scheduler_type}"
+                if cfg.noise_scheduler_type == "annealing":
+                    current_run_args.append(
+                        f"--noise-step-annealing {cfg.noise_step_annealing}"
+                    )
+                    cfg.result_dir += f"{cfg.noise_step_annealing}"
 
             current_run_args.append(f"--min-noise-step {cfg.min_noise_step}")
             current_run_args.append(f"--max-noise-step {cfg.max_noise_step}")
@@ -193,6 +202,7 @@ def do_gaussian_sr_experiments(default_run_args: List[str], opt):
             noise_step_annealing=100,
             sds_loss_type="stablesr",
             interpolation_type="bicubic",
+            sds_lambda=0.001,
         ),
         default_run_args,
         opt,
