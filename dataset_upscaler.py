@@ -129,16 +129,19 @@ def main(cfg: DatasetAugmentationConfig) -> None:
                 batch_size = 1
                 tile_size = 64
                 tile_overlap = 32
-                image_loaded = (transform(image_loaded) * 2 - 1).unsqueeze(0)
+                image_loaded = (transform(image_loaded) * 2 - 1).unsqueeze(0).to(device)
                 # need to be a multiple of tile_overlap
-                height, width = image_loaded.size(2), image_loaded.size(3)
+                height, width = (
+                    image_loaded.size(2) * cfg.scale_factor,
+                    image_loaded.size(3) * cfg.scale_factor,
+                )
                 height, width = (
                     height - height % tile_overlap,
                     width - width % tile_overlap,
                 )
                 struct_cond = F.interpolate(
                     image_loaded,
-                    (height * cfg.scale_factor, width * cfg.scale_factor),
+                    (height, width),
                     mode="bicubic",
                 ).clamp(-1.0, 1.0)
                 struct_cond_latent = model.get_first_stage_encoding(
