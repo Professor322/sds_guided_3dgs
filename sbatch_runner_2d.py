@@ -258,7 +258,7 @@ def main() -> None:
     opt = parser.parse_args()
 
     default_run_args = [
-        "PYTHONPATH=$PYTHONPATH:./StableSR python3 -u trainer_2d.py",
+        "PYTHONPATH=$PYTHONPATH:./StableSR python3 trainer_2d.py",
     ]
     result_dirs = []
     if opt.sds_experiments:

@@ -66,7 +66,7 @@ def run_classic_configuration_with_validation_3d(
         SBATCH_TEMPLATE
         + "\n"
         + f"echo '{cfg.result_dir}'\n"
-        + "srun "
+        + "PYTHONPATH=$PYTHONPATH:./StableSR srun "
         + " ".join(current_run_args)
     )
     if cfg.upscale_suffix != "":
@@ -82,7 +82,11 @@ def run_classic_configuration_with_validation_3d(
             current_run_args.append(
                 f"--densification-dropout {cfg.densification_dropout}"
             )
-            file_content += "\n" + "srun " + " ".join(current_run_args)
+            file_content += (
+                "\n"
+                + "PYTHONPATH=$PYTHONPATH:./StableSR srun "
+                + " ".join(current_run_args)
+            )
 
     if opt.debug:
         print(file_content)
@@ -96,6 +100,7 @@ def run_classic_configuration_with_validation_3d(
 
 def run_gaussian_sr_configuration(cfg: Config3D, default_run_args: List[str], opt):
     current_run_args = default_run_args.copy()
+    current_run_args.insert(0, "PYTHONPATH=$PYTHONPATH:./StableSR")
     if isinstance(cfg.strategy, MCMCStrategy):
         current_run_args.append("mcmc")
     else:
@@ -224,7 +229,7 @@ def main() -> None:
     opt = parser.parse_args()
 
     default_run_args = [
-        "PYTHONPATH=$PYTHONPATH:./StableSR python3 -u trainer_3d.py",
+        "python3 trainer_3d.py",
     ]
     result_dirs = []
     if opt.sds_experiments:
