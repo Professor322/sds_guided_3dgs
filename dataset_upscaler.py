@@ -102,11 +102,12 @@ def main(cfg: DatasetAugmentationConfig) -> None:
                         mode=cfg.upscale_type,
                     )
                     .squeeze(0)
-                    .clamp(0.0, 1.0)
+                    .clamp(0.0, 255.0)
                 )
                 image_interpolated = (
                     image_interpolated.permute(1, 2, 0).detach().cpu().numpy()
                 )
+                image_interpolated = image_interpolated.astype(np.uint8)
 
                 image_interpolated = cv2.cvtColor(image_interpolated, cv2.COLOR_RGB2BGR)
                 cv2.imwrite(output_image_path, image_interpolated)

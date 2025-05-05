@@ -207,6 +207,7 @@ def do_gaussian_sr_experiments(default_run_args: List[str], opt):
             interpolation_type="bicubic",
             sds_lambda=0.001,
             max_steps=10_000,
+            loss_type="l2loss",
         ),
         default_run_args,
         opt,
