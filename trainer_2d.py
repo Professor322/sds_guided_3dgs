@@ -414,7 +414,9 @@ class SimpleTrainer:
                     )
 
             start = time.time()
-            loss.backward()
+            loss.backward(
+                retain_graph=True if self.cfg.densification_skip_sds_grad else False
+            )
 
             torch.cuda.synchronize()
             times[1] += time.time() - start

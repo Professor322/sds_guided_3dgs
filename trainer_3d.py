@@ -274,26 +274,6 @@ class Runner:
             ]
             for k in self.splats.keys():
                 self.splats[k].data = torch.cat([ckpt["splats"][k] for ckpt in ckpts])
-            # create low res splats for rendering
-            self.splats_low_res, _ = create_splats(
-                self.parser,
-                init_type=cfg.init_type,
-                init_num_pts=cfg.init_num_pts,
-                init_extent=cfg.init_extent,
-                init_opacity=cfg.init_opa,
-                init_scale=cfg.init_scale,
-                scene_scale=self.scene_scale,
-                sh_degree=cfg.sh_degree,
-                feature_dim=feature_dim,
-                device=self.device,
-                world_rank=world_rank,
-                world_size=world_size,
-            )
-            # TODO: no need to build grad graph, need to optimize that
-            for k in self.splats.keys():
-                self.splats_low_res[k].data = torch.cat(
-                    [ckpt["splats"][k] for ckpt in ckpts]
-                )
             # redefine validation dataset
             self.val_parser = Parser(
                 data_dir=cfg.data_dir,

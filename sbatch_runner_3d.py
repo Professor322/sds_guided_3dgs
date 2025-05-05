@@ -77,17 +77,16 @@ def run_classic_configuration_with_validation_3d(
             checkpoint_path = (
                 f"{cfg.result_dir}/ckpts/ckpt_{checkpoint_num - 1}_rank0.pt"
             )
-            current_run_args = default_run_args.copy()
-            current_run_args.append(f"--data-factor {cfg.data_factor}")
-            current_run_args.append(f"--result-dir {cfg.result_dir}")
-            current_run_args.append(f"--ckpt {checkpoint_path}")
-            current_run_args.append(
-                f"--densification-dropout {cfg.densification_dropout}"
-            )
+            current_run_args_validation = [
+                arg
+                for arg in current_run_args.copy()
+                if not arg.startswith("--upscale-suffix")
+            ]
+            current_run_args_validation.append(f"--ckpt {checkpoint_path}")
             file_content += (
                 "\n"
                 + "PYTHONPATH=$PYTHONPATH:./StableSR srun "
-                + " ".join(current_run_args)
+                + " ".join(current_run_args_validation)
             )
 
     if opt.debug:
@@ -171,6 +170,10 @@ def run_gaussian_sr_configuration(cfg: Config3D, default_run_args: List[str], op
 
     current_run_args.append(f"--loss-type {cfg.loss_type}")
     cfg.result_dir += f"_{cfg.loss_type}"
+    if cfg.loss_type == "l1loss":
+        current_run_args.append(f"--ssim-lambda {cfg.ssim_lambda}")
+        cfg.result_dir += f"_ssim{str(cfg.ssim_lambda).replace('.', '_')}"
+
     current_run_args.append(f"--data-factor {cfg.data_factor}")
     current_run_args.append(f"--result-dir {cfg.result_dir}")
     file_content = (
@@ -212,7 +215,12 @@ def do_gaussian_sr_experiments(default_run_args: List[str], opt):
 
 def do_classic_experiments_with_validation(default_run_args: List[str], opt):
     return run_classic_configuration_with_validation_3d(
-        Config3D(data_factor=16, disable_viewer=True, data_dir="data/360_v2/bicycle"),
+        Config3D(
+            data_factor=4,
+            disable_viewer=True,
+            data_dir="data/360_v2/bicycle",
+            upscale_suffix="stablesr",
+        ),
         default_run_args,
         opt,
     )

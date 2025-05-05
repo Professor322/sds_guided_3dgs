@@ -271,7 +271,7 @@ class Config2D:
     debug_training: bool = False
     # gradient clipping option 0.0 - means disabled
     grad_clipping: float = 0.0
-    # implementing method from the paper
+    # implementing method from the paper https://arxiv.org/abs/2406.10111
     use_gaussian_sr: bool = False
     # scale factor for gaussian sr
     scale_factor: int = 1
@@ -306,6 +306,11 @@ class Config2D:
     encoder_checkpoint_path: str = "StableSR/vqgan_cfw_00011.ckpt"
     # type of interpolation used in intermediate operations
     interpolation_type: Literal["bilinear", "bicubic"] = "bicubic"
+    # to utilize method called SRGS https://arxiv.org/abs/2404.10318
+    use_srgs: bool = False
+    # downscale factor for the images used for
+    # super resolution upscaling
+    scaled_from: int = 4
 
 
 @dataclass
