@@ -798,13 +798,10 @@ class Runner:
                 and self.cfg.sds_loss_type != "none"
                 and self.cfg.densification_skip_sds_grad
             )
-            if not retain_graph:
+            if not retain_graph and self.cfg.sds_loss_type != "none":
                 loss += sdsloss
 
             loss.backward(retain_graph=retain_graph)
-
-            if retain_graph:
-                sdsloss.backward()
 
             # Run post-backward steps after backward and optimizer
             if isinstance(self.cfg.strategy, DefaultStrategy):
@@ -827,6 +824,9 @@ class Runner:
                 )
             else:
                 assert_never(self.cfg.strategy)
+
+            if retain_graph:
+                sdsloss.backward()
 
             desc = f"loss={loss.item():.3f}| " f"sh degree={sh_degree_to_use}| "
             if cfg.depth_loss:
