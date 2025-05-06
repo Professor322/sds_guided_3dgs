@@ -183,6 +183,10 @@ class Config3D:
     encoder_checkpoint_path: str = "StableSR/vqgan_cfw_00011.ckpt"
     # type of interpolation used in intermediate operations
     interpolation_type: Literal["bilinear", "bicubic"] = "bicubic"
+    # to utilize method called SRGS https://arxiv.org/abs/2404.10318
+    srgs: bool = False
+    # from paper
+    srgs_lambda: float = 0.4
 
     def adjust_steps(self, factor: float):
         self.eval_steps = [int(i * factor) for i in self.eval_steps]

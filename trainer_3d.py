@@ -16,7 +16,7 @@ import tqdm
 import tyro
 import viser
 import yaml
-from datasets.colmap import Dataset, Parser
+from datasets.colmap import Dataset, DatasetSRGS, Parser
 from datasets.traj import (
     generate_interpolated_path,
     generate_ellipse_path_z,
@@ -256,10 +256,48 @@ class Runner:
             world_rank=world_rank,
             world_size=world_size,
         )
+        assert not (self.cfg.gaussian_sr and self.cfg.srgs), "Use one method at a time"
+        if self.cfg.srgs:
+            if self.cfg.scale_factor <= 0.0:
+                raise ValueError("Set scale factor")
+            # we already loaded upscaled images for texture loss
+            # now we need to load low resolution images for subpixel loss
+            lowres_factor = int(cfg.data_factor * cfg.scale_factor)
+            print(
+                f"Using Super Resolution Gaussian Splats.\n"
+                f"Texture training scale {cfg.data_factor} from {cfg.upscale_suffix}\n"
+                f"Subpixel loss scale {lowres_factor}"
+            )
+            self.lr_parser = Parser(
+                data_dir=cfg.data_dir,
+                factor=lowres_factor,
+                normalize=cfg.normalize_world_space,
+                test_every=cfg.test_every,
+                # use original low resolution images
+                upscale_suffix="",
+            )
+            # redefine validation set
+            self.val_parser = Parser(
+                data_dir=cfg.data_dir,
+                factor=cfg.data_factor,
+                normalize=cfg.normalize_world_space,
+                test_every=cfg.test_every,
+                # validate on high resolution original images
+                upscale_suffix="",
+            )
+
+            self.valset = Dataset(self.val_parser, split="val")
+            self.trainset = DatasetSRGS(
+                lr_parser=self.lr_parser,
+                hr_parser=self.parser,
+                split="train",
+                patch_size=cfg.patch_size,
+                load_depths=cfg.depth_loss,
+            )
 
         if self.cfg.gaussian_sr:
             if self.cfg.scale_factor <= 0.0:
-                raise ValueError("Set scale factor to use gaussian SR")
+                raise ValueError("Set scale factor")
             if self.cfg.ckpt is None:
                 raise ValueError(
                     "Checkpoint should be provided when gaussian SR is set"
@@ -280,7 +318,8 @@ class Runner:
                 factor=int(cfg.data_factor // cfg.scale_factor),
                 normalize=cfg.normalize_world_space,
                 test_every=cfg.test_every,
-                upscale_suffix=cfg.upscale_suffix,
+                # we always want to validate on real images
+                upscale_suffix="",
             )
             self.valset = Dataset(self.val_parser, split="val")
             # initialize SDS loss
@@ -562,6 +601,8 @@ class Runner:
                 points = data["points"].to(device)  # [1, M, 2]
                 depths_gt = data["depths"].to(device)  # [1, M]
 
+            if cfg.srgs:
+                lr_pixels = data["lr"].to(device)
             height, width = (
                 pixels.shape[1:3]
                 if not self.cfg.gaussian_sr
@@ -633,11 +674,33 @@ class Runner:
             ssimloss = 1.0 - fused_ssim(
                 colors.permute(0, 3, 1, 2), pixels.permute(0, 3, 1, 2), padding="valid"
             )
-            l2loss = F.mse_loss(colors, pixels)
             if self.cfg.gaussian_sr and self.cfg.loss_type == "l2loss":
-                loss = l2loss
+                loss = F.mse_loss(colors, pixels)
             else:
                 loss = l1loss * (1.0 - cfg.ssim_lambda) + ssimloss * cfg.ssim_lambda
+
+            if cfg.srgs:
+                low_res_height, low_res_width = lr_pixels.shape[1:3]
+                # internally area is just a average pooling 2d
+                downscaled_colors = F.interpolate(
+                    colors.permute(0, 3, 1, 2),
+                    (low_res_height, low_res_width),
+                    mode="area",
+                )
+                # [b, c, h, w]
+                l1loss_subpixel = F.l1_loss(
+                    downscaled_colors, lr_pixels.permute(0, 3, 1, 2)
+                )
+                ssimloss_subpixel = 1.0 - fused_ssim(
+                    downscaled_colors, lr_pixels.permute(0, 3, 1, 2), padding="valid"
+                )
+                loss_subpixel = (
+                    l1loss_subpixel * (1.0 - cfg.srgs_lambda)
+                    + ssimloss_subpixel * cfg.srgs_lambda
+                )
+
+                loss = (1 - cfg.srgs_lambda) * loss + cfg.srgs_lambda * loss_subpixel
+
             if cfg.depth_loss:
                 # query depths from depth map
                 points = torch.stack(
@@ -749,6 +812,13 @@ class Runner:
                     self.writer.add_scalar("train/depthloss", depthloss.item(), step)
                 if cfg.use_bilateral_grid:
                     self.writer.add_scalar("train/tvloss", tvloss.item(), step)
+                if cfg.srgs:
+                    self.writer.add_scalar(
+                        "train/ssimloss_subpixel", ssimloss_subpixel.item(), step
+                    )
+                    self.writer.add_scalar(
+                        "train/l1_subpixel", l1loss_subpixel.item(), step
+                    )
                 if cfg.tb_save_image:
                     canvas = torch.cat([pixels, colors], dim=2).detach().cpu().numpy()
                     canvas = canvas.reshape(-1, *canvas.shape[2:])

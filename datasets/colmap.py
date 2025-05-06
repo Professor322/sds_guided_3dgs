@@ -1,6 +1,6 @@
 import os
 import json
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 from typing_extensions import assert_never
 
 import cv2
@@ -385,6 +385,79 @@ class Dataset:
             data["points"] = torch.from_numpy(points).float()
             data["depths"] = torch.from_numpy(depths).float()
 
+        return data
+
+
+class DatasetSRGS:
+    """
+    Dataset for Super Resolution Gaussian Splatting
+    Difference compared to the Dataset above is that
+    it returns 2 set of images and camera position:
+    > for low resolution image
+    > for high resolution image created with Super Resolution
+      Upscaling
+    Also it does not support cropping and loading depth
+    """
+
+    def __init__(
+        self,
+        lr_parser: Parser,
+        hr_parser: Parser,
+        split: str = "train",
+        patch_size: Optional[int] = None,
+        load_depths: bool = False,
+    ):
+        self.lr_parser = lr_parser
+        self.hr_parser = hr_parser
+        self.split = split
+        self.patch_size = patch_size
+        self.load_depths = load_depths
+        # should not matter which parser to use, images should have identical names
+        # and the same "test_every" property
+        indices = np.arange(len(self.lr_parser.image_names))
+        if split == "train":
+            self.indices = indices[indices % self.lr_parser.test_every != 0]
+        else:
+            self.indices = indices[indices % self.lr_parser.test_every == 0]
+
+    def __len__(self):
+        return len(self.indices)
+
+    def _getitem(self, item: int, parser: Parser) -> Dict[str, Any]:
+        index = self.indices[item]
+        image = imageio.imread(parser.image_paths[index])[..., :3]
+        camera_id = parser.camera_ids[index]
+        K = parser.Ks_dict[camera_id].copy()  # undistorted K
+        params = parser.params_dict[camera_id]
+        camtoworlds = parser.camtoworlds[index]
+        mask = parser.mask_dict[camera_id]
+
+        if len(params) > 0:
+            # Images are distorted. Undistort them.
+            mapx, mapy = (
+                parser.mapx_dict[camera_id],
+                parser.mapy_dict[camera_id],
+            )
+            image = cv2.remap(image, mapx, mapy, cv2.INTER_LINEAR)
+            x, y, w, h = parser.roi_undist_dict[camera_id]
+            image = image[y : y + h, x : x + w]
+
+        data = {
+            "K": torch.from_numpy(K).float(),
+            "camtoworld": torch.from_numpy(camtoworlds).float(),
+            "image": torch.from_numpy(image).float(),
+            "image_id": item,  # the index of the image in the dataset
+        }
+        if mask is not None:
+            data["mask"] = torch.from_numpy(mask).bool()
+
+        return data
+
+    def __getitem__(self, item: int) -> Dict[str, Any]:
+        # TODO: we don't need to do any parsing for low resolution image
+        # we just need an image
+        data = self._getitem(item, self.hr_parser)
+        data["lr"] = self._getitem(item, self.lr_parser)["image"]
         return data
 
 

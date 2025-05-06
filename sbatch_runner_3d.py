@@ -191,6 +191,61 @@ def run_gaussian_sr_configuration(cfg: Config3D, default_run_args: List[str], op
     return [cfg.result_dir]
 
 
+def run_srgs_configuration(cfg: Config3D, default_run_args: List[str], opt):
+    current_run_args = default_run_args.copy()
+    scene = cfg.data_dir.split(sep="/")[-1]
+    cfg.result_dir = f"results_3d_classic_data_factor{cfg.data_factor}_{scene}_max_steps{cfg.max_steps}"
+
+    if isinstance(cfg.strategy, MCMCStrategy):
+        cfg.result_dir += "_mcmc"
+        current_run_args.append("mcmc")
+        cfg.result_dir += f"_max_splats{cfg.max_splats}"
+        current_run_args.append(f"--max-splats {cfg.max_splats}")
+    else:
+        cfg.result_dir += "_default"
+        current_run_args.append("default")
+    if cfg.srgs:
+        cfg.result_dir += "_srgs"
+        current_run_args.append("--srgs")
+        cfg.result_dir += f"{cfg.scale_factor}"
+        current_run_args.append(f"--scale-factor {cfg.scale_factor}")
+
+    if cfg.disable_viewer:
+        current_run_args.append(f"--disable-viewer")
+
+    if cfg.upscale_suffix != "":
+        current_run_args.append(f"--upscale-suffix {cfg.upscale_suffix}")
+        cfg.result_dir += f"_{cfg.upscale_suffix}"
+
+    current_run_args.append(f"--data-factor {cfg.data_factor}")
+    current_run_args.append(f"--data-dir {cfg.data_dir}")
+
+    # disable debugging
+    cfg.encoder_checkpoint_path = ""
+    cfg.encoder_config_path = ""
+    current_run_args.append(
+        f'--encoder-checkpoint-path "{cfg.encoder_checkpoint_path}"'
+    )
+    current_run_args.append(f'--encoder-config-path "{cfg.encoder_config_path}"')
+    current_run_args.append(f"--result-dir {cfg.result_dir}")
+
+    file_content = (
+        SBATCH_TEMPLATE
+        + "\n"
+        + f"echo '{cfg.result_dir}'\n"
+        + "PYTHONPATH=$PYTHONPATH:./StableSR "
+        + " ".join(current_run_args)
+    )
+    if opt.debug:
+        print(file_content)
+    with open(SBATCH_FILENAME, "w") as file:
+        file.write(file_content)
+    if not opt.debug and not opt.top_psnr:
+        os.system(f"sbatch {SBATCH_FILENAME}")
+
+    return [cfg.result_dir]
+
+
 def do_gaussian_sr_experiments(default_run_args: List[str], opt):
     return run_gaussian_sr_configuration(
         Config3D(
@@ -227,6 +282,21 @@ def do_classic_experiments_with_validation(default_run_args: List[str], opt):
     )
 
 
+def do_srgs_experiments(default_run_args: List[str], opt):
+    return run_srgs_configuration(
+        Config3D(
+            data_factor=4,
+            disable_viewer=True,
+            data_dir="data/360_v2/bicycle",
+            upscale_suffix="stablesr",
+            scale_factor=4,
+            srgs=True,
+        ),
+        default_run_args,
+        opt,
+    )
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -239,12 +309,15 @@ def main() -> None:
     )
     parser.add_argument("--dir", type=str, default=".", help="dir to check for psnr")
     parser.add_argument(
-        "--sds-experiments", action="store_true", help="will perform sds experiments"
+        "--sds", action="store_true", help="will perform sds experiments"
     )
     parser.add_argument(
-        "--classic-experiments",
+        "--classic",
         action="store_true",
         help="will perform classic experiments",
+    )
+    parser.add_argument(
+        "--srgs", action="store_true", help="will perform srgs experiments"
     )
     opt = parser.parse_args()
 
@@ -252,12 +325,14 @@ def main() -> None:
         "python3 trainer_3d.py",
     ]
     result_dirs = []
-    if opt.sds_experiments:
+    if opt.sds:
         result_dirs.extend(do_gaussian_sr_experiments(default_run_args, opt))
-    if opt.classic_experiments:
+    if opt.classic:
         result_dirs.extend(
             do_classic_experiments_with_validation(default_run_args, opt)
         )
+    if opt.srgs:
+        result_dirs.extend(do_srgs_experiments(default_run_args, opt))
 
     if opt.top_psnr:
         print("Getting psnrs...")
