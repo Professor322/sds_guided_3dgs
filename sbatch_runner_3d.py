@@ -194,7 +194,9 @@ def run_gaussian_sr_configuration(cfg: Config3D, default_run_args: List[str], op
 def run_srgs_configuration(cfg: Config3D, default_run_args: List[str], opt):
     current_run_args = default_run_args.copy()
     scene = cfg.data_dir.split(sep="/")[-1]
-    cfg.result_dir = f"results_3d_classic_data_factor{cfg.data_factor}_{scene}_max_steps{cfg.max_steps}"
+    cfg.result_dir = (
+        f"results_3d_data_factor{cfg.data_factor}_{scene}_max_steps{cfg.max_steps}"
+    )
 
     if isinstance(cfg.strategy, MCMCStrategy):
         cfg.result_dir += "_mcmc"
