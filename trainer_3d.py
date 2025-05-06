@@ -514,6 +514,59 @@ class Runner:
             render_colors[~masks] = 0
         return render_colors, render_alphas, info
 
+    def compute_sds(self, upscaled_colors: Tensor, pixels: Tensor, step: int):
+        sds_loss = 0.0
+        if self.cfg.gaussian_sr and self.cfg.sds_loss_type != "none":
+            if self.cfg.noise_scheduler_type == "collapsing":
+                min_step = compute_collapsing_noise_step(
+                    200, 300, step / self.cfg.max_steps
+                )
+                max_step = compute_collapsing_noise_step(
+                    500, 980, step / self.cfg.max_steps
+                )
+            elif self.cfg.noise_scheduler_type == "annealing":
+                min_step = int(
+                    max(
+                        self.cfg.min_noise_step,
+                        (self.cfg.max_noise_step - 1)
+                        - step / self.cfg.noise_step_annealing,
+                    )
+                )
+                max_step = self.cfg.max_noise_step
+            else:
+                min_step = self.cfg.min_noise_step
+                max_step = self.cfg.max_noise_step
+
+            if self.cfg.sds_loss_type in ("deepfloyd_sds", "deepfloyd_sdi"):
+                sds_loss = (
+                    self.sds_loss(
+                        images=upscaled_colors.permute(0, 3, 1, 2),
+                        original=pixels.permute(0, 3, 1, 2),
+                        min_step=min_step,
+                        max_step=max_step,
+                        lowres_noise_level=self.cfg.condition_noise,
+                        scheduler_timestep=self.noise_scheduler[step]
+                        if self.cfg.noise_scheduler_type == "linear"
+                        else None,
+                        downscale_condition=False,
+                        guidance_scale=cfg.guidance_scale,
+                    )
+                    * self.cfg.sds_lambda
+                ).squeeze()
+            elif self.cfg.sds_loss_type == "stablesr":
+                sds_loss = (
+                    self.sds_loss(
+                        render=upscaled_colors.permute(0, 3, 1, 2),
+                        condition=pixels.permute(0, 3, 1, 2),
+                        min_noise_step=min_step,
+                        max_noise_step=max_step,
+                        iteration=step,
+                    )
+                    * self.cfg.sds_lambda
+                ).squeeze()
+
+        return sds_loss
+
     def train(self):
         cfg = self.cfg
         device = self.device
@@ -670,6 +723,9 @@ class Runner:
                 )
                 # permute back for compatibility
                 colors = colors.permute(0, 2, 3, 1)
+                sdsloss = self.compute_sds(
+                    upscaled_colors=upscaled_colors, pixels=pixels, step=step
+                )
             l1loss = F.l1_loss(colors, pixels)
             ssimloss = 1.0 - fused_ssim(
                 colors.permute(0, 3, 1, 2), pixels.permute(0, 3, 1, 2), padding="valid"
@@ -737,58 +793,40 @@ class Runner:
                     + cfg.scale_reg * torch.abs(torch.exp(self.splats["scales"])).mean()
                 )
 
-            if self.cfg.gaussian_sr and self.cfg.sds_loss_type != "none":
-                if self.cfg.noise_scheduler_type == "collapsing":
-                    min_step = compute_collapsing_noise_step(
-                        200, 300, step / self.cfg.max_steps
-                    )
-                    max_step = compute_collapsing_noise_step(
-                        500, 980, step / self.cfg.max_steps
-                    )
-                elif self.cfg.noise_scheduler_type == "annealing":
-                    min_step = int(
-                        max(
-                            self.cfg.min_noise_step,
-                            (self.cfg.max_noise_step - 1)
-                            - step / self.cfg.noise_step_annealing,
-                        )
-                    )
-                    max_step = self.cfg.max_noise_step
-                else:
-                    min_step = self.cfg.min_noise_step
-                    max_step = self.cfg.max_noise_step
+            retain_graph = (
+                self.cfg.gaussian_sr
+                and self.cfg.sds_loss_type != "none"
+                and self.cfg.densification_skip_sds_grad
+            )
+            if not retain_graph:
+                loss += sdsloss
 
-                if self.cfg.sds_loss_type in ("deepfloyd_sds", "deepfloyd_sdi"):
-                    sds_loss = (
-                        self.sds_loss(
-                            images=upscaled_colors.permute(0, 3, 1, 2),
-                            original=pixels.permute(0, 3, 1, 2),
-                            min_step=min_step,
-                            max_step=max_step,
-                            lowres_noise_level=self.cfg.condition_noise,
-                            scheduler_timestep=self.noise_scheduler[step]
-                            if self.cfg.noise_scheduler_type == "linear"
-                            else None,
-                            downscale_condition=False,
-                            guidance_scale=cfg.guidance_scale,
-                        )
-                        * self.cfg.sds_lambda
-                    )
-                elif self.cfg.sds_loss_type == "stablesr":
-                    sds_loss = (
-                        self.sds_loss(
-                            render=upscaled_colors.permute(0, 3, 1, 2),
-                            condition=pixels.permute(0, 3, 1, 2),
-                            min_noise_step=min_step,
-                            max_noise_step=max_step,
-                            iteration=step,
-                        )
-                        * self.cfg.sds_lambda
-                    )
+            loss.backward(retain_graph=retain_graph)
 
-                loss += sds_loss.squeeze()
+            if retain_graph:
+                sdsloss.backward()
 
-            loss.backward()
+            # Run post-backward steps after backward and optimizer
+            if isinstance(self.cfg.strategy, DefaultStrategy):
+                self.cfg.strategy.step_post_backward(
+                    params=self.splats,
+                    optimizers=self.optimizers,
+                    state=self.strategy_state,
+                    step=step,
+                    info=info,
+                    packed=cfg.packed,
+                )
+            elif isinstance(self.cfg.strategy, MCMCStrategy):
+                self.cfg.strategy.step_post_backward(
+                    params=self.splats,
+                    optimizers=self.optimizers,
+                    state=self.strategy_state,
+                    step=step,
+                    info=info,
+                    lr=schedulers[0].get_last_lr()[0],
+                )
+            else:
+                assert_never(self.cfg.strategy)
 
             desc = f"loss={loss.item():.3f}| " f"sh degree={sh_degree_to_use}| "
             if cfg.depth_loss:
@@ -819,6 +857,8 @@ class Runner:
                     self.writer.add_scalar(
                         "train/l1_subpixel", l1loss_subpixel.item(), step
                     )
+                if cfg.gaussian_sr and cfg.sds_loss_type != "none":
+                    self.writer.add_scalar("train/sdsloss", sdsloss.item(), step)
                 if cfg.tb_save_image:
                     canvas = torch.cat([pixels, colors], dim=2).detach().cpu().numpy()
                     canvas = canvas.reshape(-1, *canvas.shape[2:])
@@ -904,28 +944,6 @@ class Runner:
                 optimizer.zero_grad(set_to_none=True)
             for scheduler in schedulers:
                 scheduler.step()
-
-            # Run post-backward steps after backward and optimizer
-            if isinstance(self.cfg.strategy, DefaultStrategy):
-                self.cfg.strategy.step_post_backward(
-                    params=self.splats,
-                    optimizers=self.optimizers,
-                    state=self.strategy_state,
-                    step=step,
-                    info=info,
-                    packed=cfg.packed,
-                )
-            elif isinstance(self.cfg.strategy, MCMCStrategy):
-                self.cfg.strategy.step_post_backward(
-                    params=self.splats,
-                    optimizers=self.optimizers,
-                    state=self.strategy_state,
-                    step=step,
-                    info=info,
-                    lr=schedulers[0].get_last_lr()[0],
-                )
-            else:
-                assert_never(self.cfg.strategy)
 
             # eval the full set
             if step in [i - 1 for i in cfg.eval_steps]:

@@ -185,8 +185,10 @@ class Config3D:
     interpolation_type: Literal["bilinear", "bicubic"] = "bicubic"
     # to utilize method called SRGS https://arxiv.org/abs/2404.10318
     srgs: bool = False
-    # from paper
+    # srgs lambda between subpixel loss and texture loss
     srgs_lambda: float = 0.4
+    # avoid usage gradients from SDS for densification process
+    densification_skip_sds_grad: bool = False
 
     def adjust_steps(self, factor: float):
         self.eval_steps = [int(i * factor) for i in self.eval_steps]

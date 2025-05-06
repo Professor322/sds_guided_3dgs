@@ -163,6 +163,11 @@ def run_gaussian_sr_configuration(cfg: Config3D, default_run_args: List[str], op
             cfg.result_dir += (
                 f"_min_step{cfg.min_noise_step}_max_step{cfg.max_noise_step}"
             )
+            if cfg.densification_skip_sds_grad:
+                cfg.result_dir += "_skip_grad"
+                current_run_args.append(
+                    f"--densification-skip-sds-grad {cfg.densification_skip_sds_grad}"
+                )
 
         if cfg.scale_factor > 0.0:
             current_run_args.append(f"--scale-factor {cfg.scale_factor}")
@@ -263,8 +268,9 @@ def do_gaussian_sr_experiments(default_run_args: List[str], opt):
             sds_loss_type="stablesr",
             interpolation_type="bicubic",
             sds_lambda=0.001,
-            max_steps=10_000,
+            max_steps=30_000,
             loss_type="l2loss",
+            densification_skip_sds_grad=True,
         ),
         default_run_args,
         opt,
