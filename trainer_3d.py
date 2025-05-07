@@ -225,7 +225,13 @@ class Runner:
             test_every=cfg.test_every,
             upscale_suffix=cfg.upscale_suffix,
         )
-        self.val_parser = self.parser
+        self.val_parser = self.parser = Parser(
+            data_dir=cfg.data_dir,
+            factor=cfg.data_factor,
+            normalize=cfg.normalize_world_space,
+            test_every=cfg.test_every,
+            upscale_suffix="",
+        )
 
         self.trainset = Dataset(
             self.parser,
