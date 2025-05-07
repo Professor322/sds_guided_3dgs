@@ -71,23 +71,6 @@ def run_classic_configuration_with_validation_3d(
         + "PYTHONPATH=$PYTHONPATH:./StableSR srun "
         + " ".join(current_run_args)
     )
-    if cfg.upscale_suffix != "":
-        # means we need to do a validation of resulting checkpoint on the real "data factor" images
-        for checkpoint_num in cfg.save_steps:
-            checkpoint_path = (
-                f"{cfg.result_dir}/ckpts/ckpt_{checkpoint_num - 1}_rank0.pt"
-            )
-            current_run_args_validation = [
-                arg
-                for arg in current_run_args.copy()
-                if not arg.startswith("--upscale-suffix")
-            ]
-            current_run_args_validation.append(f"--ckpt {checkpoint_path}")
-            file_content += (
-                "\n"
-                + "PYTHONPATH=$PYTHONPATH:./StableSR srun "
-                + " ".join(current_run_args_validation)
-            )
 
     if opt.debug:
         print(file_content)
