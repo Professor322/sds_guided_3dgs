@@ -751,11 +751,11 @@ class Runner:
                     downscaled_colors, lr_pixels.permute(0, 3, 1, 2), padding="valid"
                 )
                 loss_subpixel = (
-                    l1loss_subpixel * (1.0 - cfg.srgs_lambda)
-                    + ssimloss_subpixel * cfg.srgs_lambda
+                    l1loss_subpixel * (1.0 - cfg.ssim_lambda)
+                    + ssimloss_subpixel * cfg.ssim_lambda
                 )
 
-                loss = (1 - cfg.srgs_lambda) * loss + cfg.srgs_lambda * loss_subpixel
+                loss = (1.0 - cfg.srgs_lambda) * loss + cfg.srgs_lambda * loss_subpixel
 
             if cfg.depth_loss:
                 # query depths from depth map
