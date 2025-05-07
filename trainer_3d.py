@@ -260,6 +260,16 @@ class Runner:
         if self.cfg.srgs:
             if self.cfg.scale_factor <= 0.0:
                 raise ValueError("Set scale factor")
+            if self.cfg.ckpt is not None:
+                ckpts = [
+                    torch.load(file, map_location=self.device, weights_only=True)
+                    for file in cfg.ckpt
+                ]
+                for k in self.splats.keys():
+                    self.splats[k].data = torch.cat(
+                        [ckpt["splats"][k] for ckpt in ckpts]
+                    )
+
             # we already loaded upscaled images for texture loss
             # now we need to load low resolution images for subpixel loss
             lowres_factor = int(cfg.data_factor * cfg.scale_factor)
@@ -1168,7 +1178,7 @@ def main(local_rank: int, world_rank, world_size: int, cfg: Config3D):
 
     runner = Runner(local_rank, world_rank, world_size, cfg)
 
-    if cfg.ckpt is not None and cfg.gaussian_sr is False:
+    if cfg.ckpt is not None and cfg.gaussian_sr is False and cfg.srgs is False:
         # run eval only
         ckpts = [
             torch.load(file, map_location=runner.device, weights_only=True)

@@ -224,6 +224,10 @@ def run_srgs_configuration(cfg: Config3D, default_run_args: List[str], opt):
         current_run_args.append(f"--upscale-suffix {cfg.upscale_suffix}")
         cfg.result_dir += f"_{cfg.upscale_suffix}"
 
+    if cfg.ckpt is not None:
+        cfg.result_dir += "_with_ckpt"
+        current_run_args.append(f"--ckpt {cfg.ckpt}")
+
     current_run_args.append(f"--data-factor {cfg.data_factor}")
     current_run_args.append(f"--data-dir {cfg.data_dir}")
 
@@ -299,6 +303,7 @@ def do_srgs_experiments(default_run_args: List[str], opt):
             upscale_suffix="stablesr",
             scale_factor=4,
             srgs=True,
+            ckpt="results_3d_classic_data_factor16_bicycle_max_steps30000_default/ckpts/ckpt_29999_rank0.pt",
         ),
         default_run_args,
         opt,
