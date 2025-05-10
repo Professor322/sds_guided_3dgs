@@ -225,7 +225,7 @@ class Runner:
             test_every=cfg.test_every,
             upscale_suffix=cfg.upscale_suffix,
         )
-        self.val_parser = self.parser = Parser(
+        self.val_parser = Parser(
             data_dir=cfg.data_dir,
             factor=cfg.data_factor,
             normalize=cfg.normalize_world_space,
@@ -239,7 +239,7 @@ class Runner:
             patch_size=cfg.patch_size,
             load_depths=cfg.depth_loss,
         )
-        self.valset = Dataset(self.parser, split="val")
+        self.valset = Dataset(self.val_parser, split="val")
         self.scene_scale = self.parser.scene_scale * 1.1 * cfg.global_scale
         print("Scene scale:", self.scene_scale)
 
