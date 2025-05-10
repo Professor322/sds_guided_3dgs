@@ -26,11 +26,11 @@ SBATCH_FILENAME = "3d_training_generated.sbatch"
 
 
 def run_classic_configuration_with_validation_3d(
-    cfg: Config3D, default_run_args: List[str], opt
+    cfg: Config3D, default_run_args: List[str], opt, prefix=""
 ):
     current_run_args = default_run_args.copy()
     scene = cfg.data_dir.split(sep="/")[-1]
-    cfg.result_dir = f"results_3d_classic_data_factor{cfg.data_factor}_{scene}_max_steps{cfg.max_steps}"
+    cfg.result_dir = f"{prefix}results_3d_classic_data_factor{cfg.data_factor}_{scene}_max_steps{cfg.max_steps}"
 
     if isinstance(cfg.strategy, MCMCStrategy):
         cfg.result_dir += "_mcmc"
@@ -82,7 +82,9 @@ def run_classic_configuration_with_validation_3d(
     return [cfg.result_dir]
 
 
-def run_gaussian_sr_configuration(cfg: Config3D, default_run_args: List[str], opt):
+def run_gaussian_sr_configuration(
+    cfg: Config3D, default_run_args: List[str], opt, prefix=""
+):
     current_run_args = default_run_args.copy()
     current_run_args.insert(0, "PYTHONPATH=$PYTHONPATH:./StableSR")
     if isinstance(cfg.strategy, MCMCStrategy):
@@ -100,9 +102,7 @@ def run_gaussian_sr_configuration(cfg: Config3D, default_run_args: List[str], op
     current_run_args.append(f'--encoder-config-path "{cfg.encoder_config_path}"')
     current_run_args.append(f"--data-dir {cfg.data_dir}")
     scene = cfg.data_dir.split(sep="/")[-1]
-    cfg.result_dir = (
-        f"results_3d_data_factor{cfg.data_factor}_{scene}_max_steps{cfg.max_steps}"
-    )
+    cfg.result_dir = f"{prefix}results_3d_data_factor{cfg.data_factor}_{scene}_max_steps{cfg.max_steps}"
 
     if isinstance(cfg.strategy, MCMCStrategy):
         cfg.result_dir += "_mcmc"
@@ -179,12 +179,10 @@ def run_gaussian_sr_configuration(cfg: Config3D, default_run_args: List[str], op
     return [cfg.result_dir]
 
 
-def run_srgs_configuration(cfg: Config3D, default_run_args: List[str], opt):
+def run_srgs_configuration(cfg: Config3D, default_run_args: List[str], opt, prefix=""):
     current_run_args = default_run_args.copy()
     scene = cfg.data_dir.split(sep="/")[-1]
-    cfg.result_dir = (
-        f"results_3d_data_factor{cfg.data_factor}_{scene}_max_steps{cfg.max_steps}"
-    )
+    cfg.result_dir = f"{prefix}results_3d_data_factor{cfg.data_factor}_{scene}_max_steps{cfg.max_steps}"
 
     if isinstance(cfg.strategy, MCMCStrategy):
         cfg.result_dir += "_mcmc"
@@ -293,7 +291,216 @@ def do_srgs_experiments(default_run_args: List[str], opt):
     )
 
 
-def main() -> None:
+def do_thesis_experiments(default_run_args: List[str], opt):
+    # this function performs whole set of validations on the scene
+    # needed for the thesis, namely:
+    # 1) low resolution training (baseline)
+    # 2) low resolution training MCMC, used only for MCMC methods
+    # 3) original high resolution training (upper bound)
+    # 4) bicubic upscale training
+    # 5) super resolution upscale training
+    # 6) SRGS with MCMC
+    # 7) SRGS with default
+    # 8) gaussianSR default
+    # 9) gaussianSR MCMC + l1loss
+    # 10) gaussianSR MCMC + l2loss
+    result_dirs = []
+    scene = "bicycle"
+    data_dir = f"data/360_v2/{scene}"
+    scene_dir = f"thesis_{scene}"
+
+    # create a dir for validation
+    os.makedirs(scene_dir, exist_ok=True)
+    # train low resolution splats
+    result_dirs.extend(
+        run_classic_configuration_with_validation_3d(
+            Config3D(
+                data_factor=16,
+                disable_viewer=True,
+                data_dir=data_dir,
+            ),
+            default_run_args,
+            opt,
+            scene_dir + "/",
+        )
+    )
+    lowres_default_ckpt = result_dirs[-1]
+    result_dirs.extend(
+        run_classic_configuration_with_validation_3d(
+            Config3D(
+                data_factor=16,
+                disable_viewer=True,
+                data_dir=data_dir,
+                strategy=MCMCStrategy(),
+                max_splats=3_000_000,
+            ),
+            default_run_args,
+            opt,
+            scene_dir + "/",
+        )
+    )
+    lowres_mcmc_ckpt = result_dirs[-1]
+    # train highres splat
+    result_dirs.extend(
+        run_classic_configuration_with_validation_3d(
+            Config3D(
+                data_factor=4,
+                disable_viewer=True,
+                data_dir=data_dir,
+            ),
+            default_run_args,
+            opt,
+            scene_dir + "/",
+        )
+    )
+    # train bicubic upscale splat
+    result_dirs.extend(
+        run_classic_configuration_with_validation_3d(
+            Config3D(
+                data_factor=4,
+                disable_viewer=True,
+                data_dir=data_dir,
+                upscale_suffix="bicubic",
+            ),
+            default_run_args,
+            opt,
+            scene_dir + "/",
+        )
+    )
+    # train super resolution upscale splat
+    result_dirs.extend(
+        run_classic_configuration_with_validation_3d(
+            Config3D(
+                data_factor=4,
+                disable_viewer=True,
+                data_dir=data_dir,
+                upscale_suffix="stablesr",
+            ),
+            default_run_args,
+            opt,
+            scene_dir + "/",
+        )
+    )
+
+    # do srgs
+    # default
+    result_dirs.extend(
+        run_srgs_configuration(
+            Config3D(
+                data_factor=4,
+                disable_viewer=True,
+                data_dir=data_dir,
+                upscale_suffix="stablesr",
+                scale_factor=4,
+                srgs=True,
+            ),
+            default_run_args,
+            opt,
+            scene_dir + "/",
+        )
+    )
+
+    # MCMC
+    result_dirs.extend(
+        run_srgs_configuration(
+            Config3D(
+                data_factor=4,
+                disable_viewer=True,
+                data_dir=data_dir,
+                upscale_suffix="stablesr",
+                scale_factor=4,
+                srgs=True,
+                strategy=MCMCStrategy(),
+                max_splats=3_000_000,
+            ),
+            default_run_args,
+            opt,
+            scene_dir + "/",
+        )
+    )
+
+    # do gaussianSR
+    # default
+    result_dirs.extend(
+        run_gaussian_sr_configuration(
+            Config3D(
+                data_factor=16,
+                disable_viewer=True,
+                data_dir=data_dir,
+                ckpt=f"{lowres_default_ckpt}/ckpts/ckpt_29999_rank0.pt",
+                scale_factor=4,
+                gaussian_sr=True,
+                densification_dropout=0.7,
+                noise_scheduler_type="annealing",
+                noise_step_annealing=100,
+                sds_loss_type="stablesr",
+                interpolation_type="bicubic",
+                sds_lambda=0.001,
+                max_steps=30_000,
+                loss_type="l2loss",
+                # otherwise we are always running out of memory
+                densification_skip_sds_grad=True,
+            ),
+            default_run_args,
+            opt,
+            scene_dir + "/",
+        )
+    )
+    # MCMC + l1loss
+    result_dirs.extend(
+        run_gaussian_sr_configuration(
+            Config3D(
+                data_factor=16,
+                disable_viewer=True,
+                data_dir=data_dir,
+                ckpt=f"{lowres_mcmc_ckpt}/ckpts/ckpt_29999_rank0.pt",
+                scale_factor=4,
+                gaussian_sr=True,
+                noise_scheduler_type="annealing",
+                noise_step_annealing=100,
+                sds_loss_type="stablesr",
+                interpolation_type="bicubic",
+                sds_lambda=0.001,
+                max_steps=30_000,
+                strategy=MCMCStrategy(),
+                max_splats=3_000_000,
+            ),
+            default_run_args,
+            opt,
+            scene_dir + "/",
+        )
+    )
+    # MCMC
+    result_dirs.extend(
+        run_gaussian_sr_configuration(
+            Config3D(
+                data_factor=16,
+                disable_viewer=True,
+                data_dir=data_dir,
+                ckpt=f"{lowres_mcmc_ckpt}/ckpts/ckpt_29999_rank0.pt",
+                scale_factor=4,
+                gaussian_sr=True,
+                noise_scheduler_type="annealing",
+                noise_step_annealing=100,
+                sds_loss_type="stablesr",
+                interpolation_type="bicubic",
+                sds_lambda=0.001,
+                max_steps=30_000,
+                strategy=MCMCStrategy(),
+                max_splats=3_000_000,
+                loss_type="l2loss",
+            ),
+            default_run_args,
+            opt,
+            scene_dir + "/",
+        )
+    )
+    print(lowres_default_ckpt)
+    print(f"Started {len(result_dirs)} experiments")
+    return result_dirs
+
+
+def main() -> None:  #
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--debug", action="store_true", help="does a dry run of sbatch command"
@@ -315,6 +522,11 @@ def main() -> None:
     parser.add_argument(
         "--srgs", action="store_true", help="will perform srgs experiments"
     )
+    parser.add_argument(
+        "--thesis",
+        action="store_true",
+        help="run all expriemnents needed for the thesis for particular scene",
+    )
     opt = parser.parse_args()
 
     default_run_args = [
@@ -329,6 +541,9 @@ def main() -> None:
         )
     if opt.srgs:
         result_dirs.extend(do_srgs_experiments(default_run_args, opt))
+
+    if opt.thesis:
+        result_dirs.extend(do_thesis_experiments(default_run_args, opt))
 
     if opt.top_psnr:
         print("Getting psnrs...")
