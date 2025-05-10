@@ -148,9 +148,7 @@ def run_gaussian_sr_configuration(
             )
             if cfg.densification_skip_sds_grad:
                 cfg.result_dir += "_skip_grad"
-                current_run_args.append(
-                    f"--densification-skip-sds-grad {cfg.densification_skip_sds_grad}"
-                )
+                current_run_args.append(f"--densification-skip-sds-grad")
 
         if cfg.scale_factor > 0.0:
             current_run_args.append(f"--scale-factor {cfg.scale_factor}")
@@ -295,15 +293,15 @@ def do_thesis_experiments(default_run_args: List[str], opt):
     # this function performs whole set of validations on the scene
     # needed for the thesis, namely:
     # 1) low resolution training (baseline)
-    # 2) low resolution training MCMC, used only for MCMC methods
+    # 2) low resolution training MCMC [3_000_000], used only for MCMC [3_000_000] methods
     # 3) original high resolution training (upper bound)
     # 4) bicubic upscale training
     # 5) super resolution upscale training
-    # 6) SRGS with MCMC
+    # 6) SRGS with MCMC [3_000_000, 6_000_000]
     # 7) SRGS with default
     # 8) gaussianSR default
-    # 9) gaussianSR MCMC + l1loss
-    # 10) gaussianSR MCMC + l2loss
+    # 9) gaussianSR MCMC [3_000_000, 6_000_000] + l1loss
+    # 10) gaussianSR MCMC [3_000_000, 6_000_000] + l2loss
     result_dirs = []
     scene = "bicycle"
     data_dir = f"data/360_v2/{scene}"
@@ -401,23 +399,24 @@ def do_thesis_experiments(default_run_args: List[str], opt):
     )
 
     # MCMC
-    result_dirs.extend(
-        run_srgs_configuration(
-            Config3D(
-                data_factor=4,
-                disable_viewer=True,
-                data_dir=data_dir,
-                upscale_suffix="stablesr",
-                scale_factor=4,
-                srgs=True,
-                strategy=MCMCStrategy(),
-                max_splats=3_000_000,
-            ),
-            default_run_args,
-            opt,
-            scene_dir + "/",
+    for max_splats in [3_000_000, 6_000_000]:
+        result_dirs.extend(
+            run_srgs_configuration(
+                Config3D(
+                    data_factor=4,
+                    disable_viewer=True,
+                    data_dir=data_dir,
+                    upscale_suffix="stablesr",
+                    scale_factor=4,
+                    srgs=True,
+                    strategy=MCMCStrategy(),
+                    max_splats=max_splats,
+                ),
+                default_run_args,
+                opt,
+                scene_dir + "/",
+            )
         )
-    )
 
     # do gaussianSR
     # default
@@ -427,7 +426,7 @@ def do_thesis_experiments(default_run_args: List[str], opt):
                 data_factor=16,
                 disable_viewer=True,
                 data_dir=data_dir,
-                ckpt=f"{lowres_default_ckpt}/ckpts/ckpt_29999_rank0.pt",
+                ckpt=f"thesis_{scene}/results_3d_classic_data_factor16_{scene}_max_steps30000_default/ckpts/ckpt_29999_rank0.pt",
                 scale_factor=4,
                 gaussian_sr=True,
                 densification_dropout=0.7,
@@ -446,55 +445,56 @@ def do_thesis_experiments(default_run_args: List[str], opt):
             scene_dir + "/",
         )
     )
-    # MCMC + l1loss
-    result_dirs.extend(
-        run_gaussian_sr_configuration(
-            Config3D(
-                data_factor=16,
-                disable_viewer=True,
-                data_dir=data_dir,
-                ckpt=f"{lowres_mcmc_ckpt}/ckpts/ckpt_29999_rank0.pt",
-                scale_factor=4,
-                gaussian_sr=True,
-                noise_scheduler_type="annealing",
-                noise_step_annealing=100,
-                sds_loss_type="stablesr",
-                interpolation_type="bicubic",
-                sds_lambda=0.001,
-                max_steps=30_000,
-                strategy=MCMCStrategy(),
-                max_splats=3_000_000,
-            ),
-            default_run_args,
-            opt,
-            scene_dir + "/",
+    for max_splats in [3_000_000, 6_000_000]:
+        # MCMC + l1loss
+        result_dirs.extend(
+            run_gaussian_sr_configuration(
+                Config3D(
+                    data_factor=16,
+                    disable_viewer=True,
+                    data_dir=data_dir,
+                    ckpt=f"thesis_{scene}/results_3d_classic_data_factor16_{scene}_max_steps30000_mcmc_max_splats3000000/ckpts/ckpt_29999_rank0.pt",
+                    scale_factor=4,
+                    gaussian_sr=True,
+                    noise_scheduler_type="annealing",
+                    noise_step_annealing=100,
+                    sds_loss_type="stablesr",
+                    interpolation_type="bicubic",
+                    sds_lambda=0.001,
+                    max_steps=30_000,
+                    strategy=MCMCStrategy(),
+                    max_splats=max_splats,
+                ),
+                default_run_args,
+                opt,
+                scene_dir + "/",
+            )
         )
-    )
-    # MCMC
-    result_dirs.extend(
-        run_gaussian_sr_configuration(
-            Config3D(
-                data_factor=16,
-                disable_viewer=True,
-                data_dir=data_dir,
-                ckpt=f"{lowres_mcmc_ckpt}/ckpts/ckpt_29999_rank0.pt",
-                scale_factor=4,
-                gaussian_sr=True,
-                noise_scheduler_type="annealing",
-                noise_step_annealing=100,
-                sds_loss_type="stablesr",
-                interpolation_type="bicubic",
-                sds_lambda=0.001,
-                max_steps=30_000,
-                strategy=MCMCStrategy(),
-                max_splats=3_000_000,
-                loss_type="l2loss",
-            ),
-            default_run_args,
-            opt,
-            scene_dir + "/",
+        # MCMC
+        result_dirs.extend(
+            run_gaussian_sr_configuration(
+                Config3D(
+                    data_factor=16,
+                    disable_viewer=True,
+                    data_dir=data_dir,
+                    ckpt=f"thesis_{scene}/results_3d_classic_data_factor16_{scene}_max_steps30000_mcmc_max_splats3000000/ckpts/ckpt_29999_rank0.pt",
+                    scale_factor=4,
+                    gaussian_sr=True,
+                    noise_scheduler_type="annealing",
+                    noise_step_annealing=100,
+                    sds_loss_type="stablesr",
+                    interpolation_type="bicubic",
+                    sds_lambda=0.001,
+                    max_steps=30_000,
+                    strategy=MCMCStrategy(),
+                    max_splats=max_splats,
+                    loss_type="l2loss",
+                ),
+                default_run_args,
+                opt,
+                scene_dir + "/",
+            )
         )
-    )
     print(lowres_default_ckpt)
     print(f"Started {len(result_dirs)} experiments")
     return result_dirs
