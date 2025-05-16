@@ -304,6 +304,8 @@ def do_thesis_experiments(default_run_args: List[str], opt):
     # 9) gaussianSR MCMC [3_000_000, 6_000_000] + l1loss
     # 10) gaussianSR MCMC [3_000_000, 6_000_000] + l2loss
     # 11) just subpixel optimization (bicubic downsample)
+    # 12) bicubic upscale with MCMC
+    # 13) stablesr upscale with MCMC
     result_dirs = []
     scene = "bicycle"
     data_dir = f"data/360_v2/{scene}"
@@ -311,6 +313,7 @@ def do_thesis_experiments(default_run_args: List[str], opt):
 
     # create a dir for validation
     os.makedirs(scene_dir, exist_ok=True)
+
     """
     # train low resolution splats
     result_dirs.extend(
@@ -366,6 +369,24 @@ def do_thesis_experiments(default_run_args: List[str], opt):
             scene_dir + "/",
         )
     )
+    """
+    # train bicubic upscale splat with MCMC
+    result_dirs.extend(
+        run_classic_configuration_with_validation_3d(
+            Config3D(
+                data_factor=4,
+                disable_viewer=True,
+                data_dir=data_dir,
+                upscale_suffix="bicubic",
+                strategy=MCMCStrategy(),
+                max_splats=3_000_000,
+            ),
+            default_run_args,
+            opt,
+            scene_dir + "/",
+        )
+    )
+    """
     # train super resolution upscale splat
     result_dirs.extend(
         run_classic_configuration_with_validation_3d(
@@ -380,7 +401,24 @@ def do_thesis_experiments(default_run_args: List[str], opt):
             scene_dir + "/",
         )
     )
-
+    """
+    # train super resolution upscale splat with MCMC
+    result_dirs.extend(
+        run_classic_configuration_with_validation_3d(
+            Config3D(
+                data_factor=4,
+                disable_viewer=True,
+                data_dir=data_dir,
+                upscale_suffix="stablesr",
+                strategy=MCMCStrategy(),
+                max_splats=3_000_000,
+            ),
+            default_run_args,
+            opt,
+            scene_dir + "/",
+        )
+    )
+    """
     # do srgs
     # default
     result_dirs.extend(
@@ -496,7 +534,7 @@ def do_thesis_experiments(default_run_args: List[str], opt):
                 scene_dir + "/",
             )
         )
-    """
+
     # just subpixel optimisation
     result_dirs.extend(
         run_gaussian_sr_configuration(
@@ -520,6 +558,7 @@ def do_thesis_experiments(default_run_args: List[str], opt):
             scene_dir + "/",
         )
     )
+    """
     print(f"Started {len(result_dirs)} experiments")
     return result_dirs
 
@@ -579,7 +618,7 @@ def main() -> None:  #
             "ssim": [],
             "lpips": [],
             "num_GS": [],
-            "training_time": [],
+            "training_time_min": [],
             "dirs": [],
             "eval_step": [],
         }
@@ -602,12 +641,14 @@ def main() -> None:  #
                     results["eval_step"].append(eval_step)
                     training_filename = f"{result_dir}/stats/train_step{last_training_step - 1}_rank0.json"
                     if not os.path.exists(training_filename):
-                        results["training_time"].append(-1)
+                        results["training_time_min"].append(-1)
                     else:
                         with open(training_filename, "r") as train_file:
                             data = train_file.read()
                             train = json.loads(data)
-                            results["training_time"].append(train["ellipse_time"])
+                            results["training_time_min"].append(
+                                train["ellipse_time"] / 60
+                            )
         df = pd.DataFrame(results)
         pd.set_option("display.max_colwidth", None)
         df.sort_values(by=["dirs", "psnr"], inplace=True, ascending=False)
