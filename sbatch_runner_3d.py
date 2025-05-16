@@ -4,6 +4,7 @@ import os
 import json
 import glob
 import argparse
+import pandas as pd
 
 
 SBATCH_TEMPLATE = """#!/bin/bash
@@ -569,26 +570,48 @@ def main() -> None:  #
         result_dirs.extend(do_thesis_experiments(default_run_args, opt))
 
     if opt.top_psnr:
-        print("Getting psnrs...")
-        psnrs_to_dirs = []
+        print("Getting metrics...")
         result_dirs = glob.glob(f"{opt.dir}/results_3d*")
         eval_steps = Config3D().eval_steps
+        last_training_step = Config3D().save_steps[-1]
+        results = {
+            "psnr": [],
+            "ssim": [],
+            "lpips": [],
+            "num_GS": [],
+            "training_time": [],
+            "dirs": [],
+            "eval_step": [],
+        }
         for result_dir in result_dirs:
-            for checkpoint in eval_steps:
-                filename = f"{result_dir}/stats/val_step{checkpoint - 1}.json"
-                if not os.path.exists(filename):
+            for eval_step in eval_steps:
+                val_filename = f"{result_dir}/stats/val_step{eval_step - 1}.json"
+                if not os.path.exists(val_filename):
                     continue
                 with open(
-                    filename,
+                    val_filename,
                     "r",
-                ) as file:
-                    data = file.read()
-                    results = json.loads(data)
-                    psnrs_to_dirs.append((results["psnr"], checkpoint, result_dir))
-
-        psnrs_to_dirs = sorted(psnrs_to_dirs, reverse=True)
-        for psnr_to_dir in psnrs_to_dirs:
-            print(psnr_to_dir)
+                ) as val_file:
+                    data = val_file.read()
+                    val = json.loads(data)
+                    results["psnr"].append(val["psnr"])
+                    results["ssim"].append(val["ssim"])
+                    results["lpips"].append(val["lpips"])
+                    results["num_GS"].append(val["num_GS"])
+                    results["dirs"].append(result_dir)
+                    results["eval_step"].append(eval_step)
+                    training_filename = f"{result_dir}/stats/train_step{last_training_step - 1}_rank0.json"
+                    if not os.path.exists(training_filename):
+                        results["training_time"].append(-1)
+                    else:
+                        with open(training_filename, "r") as train_file:
+                            data = train_file.read()
+                            train = json.loads(data)
+                            results["training_time"].append(train["ellipse_time"])
+        df = pd.DataFrame(results)
+        df.sort_values(by=["dirs", "psnr"], inplace=True, ascending=False)
+        df.drop_duplicates(subset=["dirs"], keep="first", inplace=True)
+        print(df)
 
 
 if __name__ == "__main__":
