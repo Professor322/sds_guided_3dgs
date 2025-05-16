@@ -302,6 +302,7 @@ def do_thesis_experiments(default_run_args: List[str], opt):
     # 8) gaussianSR default
     # 9) gaussianSR MCMC [3_000_000, 6_000_000] + l1loss
     # 10) gaussianSR MCMC [3_000_000, 6_000_000] + l2loss
+    # 11) just subpixel optimization (bicubic downsample)
     result_dirs = []
     scene = "bicycle"
     data_dir = f"data/360_v2/{scene}"
@@ -309,6 +310,7 @@ def do_thesis_experiments(default_run_args: List[str], opt):
 
     # create a dir for validation
     os.makedirs(scene_dir, exist_ok=True)
+    """
     # train low resolution splats
     result_dirs.extend(
         run_classic_configuration_with_validation_3d(
@@ -322,7 +324,6 @@ def do_thesis_experiments(default_run_args: List[str], opt):
             scene_dir + "/",
         )
     )
-    lowres_default_ckpt = result_dirs[-1]
     result_dirs.extend(
         run_classic_configuration_with_validation_3d(
             Config3D(
@@ -337,7 +338,6 @@ def do_thesis_experiments(default_run_args: List[str], opt):
             scene_dir + "/",
         )
     )
-    lowres_mcmc_ckpt = result_dirs[-1]
     # train highres splat
     result_dirs.extend(
         run_classic_configuration_with_validation_3d(
@@ -495,7 +495,30 @@ def do_thesis_experiments(default_run_args: List[str], opt):
                 scene_dir + "/",
             )
         )
-    print(lowres_default_ckpt)
+    """
+    # just subpixel optimisation
+    result_dirs.extend(
+        run_gaussian_sr_configuration(
+            Config3D(
+                data_factor=16,
+                disable_viewer=True,
+                data_dir=data_dir,
+                ckpt=f"thesis_{scene}/results_3d_classic_data_factor16_{scene}_max_steps30000_default/ckpts/ckpt_29999_rank0.pt",
+                scale_factor=4,
+                gaussian_sr=True,
+                noise_scheduler_type="annealing",
+                noise_step_annealing=100,
+                sds_loss_type="none",
+                interpolation_type="bicubic",
+                sds_lambda=0.001,
+                max_steps=30_000,
+                loss_type="l1loss",
+            ),
+            default_run_args,
+            opt,
+            scene_dir + "/",
+        )
+    )
     print(f"Started {len(result_dirs)} experiments")
     return result_dirs
 
