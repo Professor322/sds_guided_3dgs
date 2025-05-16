@@ -609,9 +609,11 @@ def main() -> None:  #
                             train = json.loads(data)
                             results["training_time"].append(train["ellipse_time"])
         df = pd.DataFrame(results)
+        pd.set_option("display.max_colwidth", None)
         df.sort_values(by=["dirs", "psnr"], inplace=True, ascending=False)
         df.drop_duplicates(subset=["dirs"], keep="first", inplace=True)
-        print(df)
+        df.sort_values(by=["psnr"], inplace=True, ascending=False)
+        print(df.to_string())
 
 
 if __name__ == "__main__":
