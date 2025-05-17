@@ -5,6 +5,7 @@ import json
 import glob
 import argparse
 import pandas as pd
+import shutil
 
 
 SBATCH_TEMPLATE = """#!/bin/bash
@@ -29,6 +30,8 @@ SBATCH_FILENAME = "3d_training_generated.sbatch"
 def run_classic_configuration_with_validation_3d(
     cfg: Config3D, default_run_args: List[str], opt, prefix=""
 ):
+    if opt.collect_validation_data:
+        return []
     current_run_args = default_run_args.copy()
     scene = cfg.data_dir.split(sep="/")[-1]
     cfg.result_dir = f"{prefix}results_3d_classic_data_factor{cfg.data_factor}_{scene}_max_steps{cfg.max_steps}"
@@ -77,7 +80,7 @@ def run_classic_configuration_with_validation_3d(
         print(file_content)
     with open(SBATCH_FILENAME, "w") as file:
         file.write(file_content)
-    if not opt.debug and not opt.top_psnr:
+    if not opt.debug:
         os.system(f"sbatch {SBATCH_FILENAME}")
 
     return [cfg.result_dir]
@@ -86,6 +89,8 @@ def run_classic_configuration_with_validation_3d(
 def run_gaussian_sr_configuration(
     cfg: Config3D, default_run_args: List[str], opt, prefix=""
 ):
+    if opt.collect_validation_data:
+        return []
     current_run_args = default_run_args.copy()
     current_run_args.insert(0, "PYTHONPATH=$PYTHONPATH:./StableSR")
     if isinstance(cfg.strategy, MCMCStrategy):
@@ -173,12 +178,14 @@ def run_gaussian_sr_configuration(
         print(file_content)
     with open(SBATCH_FILENAME, "w") as file:
         file.write(file_content)
-    if not opt.debug and not opt.top_psnr:
+    if not opt.debug:
         os.system(f"sbatch {SBATCH_FILENAME}")
     return [cfg.result_dir]
 
 
 def run_srgs_configuration(cfg: Config3D, default_run_args: List[str], opt, prefix=""):
+    if opt.collect_validation_data:
+        return []
     current_run_args = default_run_args.copy()
     scene = cfg.data_dir.split(sep="/")[-1]
     cfg.result_dir = f"{prefix}results_3d_data_factor{cfg.data_factor}_{scene}_max_steps{cfg.max_steps}"
@@ -231,7 +238,7 @@ def run_srgs_configuration(cfg: Config3D, default_run_args: List[str], opt, pref
         print(file_content)
     with open(SBATCH_FILENAME, "w") as file:
         file.write(file_content)
-    if not opt.debug and not opt.top_psnr:
+    if not opt.debug:
         os.system(f"sbatch {SBATCH_FILENAME}")
 
     return [cfg.result_dir]
@@ -314,7 +321,6 @@ def do_thesis_experiments(default_run_args: List[str], opt):
     # create a dir for validation
     os.makedirs(scene_dir, exist_ok=True)
 
-    """
     # train low resolution splats
     result_dirs.extend(
         run_classic_configuration_with_validation_3d(
@@ -369,7 +375,7 @@ def do_thesis_experiments(default_run_args: List[str], opt):
             scene_dir + "/",
         )
     )
-    """
+
     # train bicubic upscale splat with MCMC
     result_dirs.extend(
         run_classic_configuration_with_validation_3d(
@@ -386,7 +392,7 @@ def do_thesis_experiments(default_run_args: List[str], opt):
             scene_dir + "/",
         )
     )
-    """
+
     # train super resolution upscale splat
     result_dirs.extend(
         run_classic_configuration_with_validation_3d(
@@ -401,7 +407,7 @@ def do_thesis_experiments(default_run_args: List[str], opt):
             scene_dir + "/",
         )
     )
-    """
+
     # train super resolution upscale splat with MCMC
     result_dirs.extend(
         run_classic_configuration_with_validation_3d(
@@ -418,7 +424,6 @@ def do_thesis_experiments(default_run_args: List[str], opt):
             scene_dir + "/",
         )
     )
-    """
     # do srgs
     # default
     result_dirs.extend(
@@ -558,9 +563,26 @@ def do_thesis_experiments(default_run_args: List[str], opt):
             scene_dir + "/",
         )
     )
-    """
     print(f"Started {len(result_dirs)} experiments")
     return result_dirs
+
+
+def create_lookup_dict(scene: str) -> dict[str]:
+    return {
+        # classic methods
+        f"results_3d_classic_data_factor4_{scene}_max_steps30000_default": "original",
+        f"results_3d_classic_data_factor4_{scene}_max_steps30000_default_bicubic": "bicubic",
+        # HRNVS methods
+        f"results_3d_classic_data_factor4_{scene}_max_steps30000_default_stablesr": "stablesr",
+        f"results_3d_data_factor16_{scene}_max_steps30000_default_dens_drop0_7_gaussian_sr_stablesr0_001_noise_scheduler_annealing100_min_step20_max_step980_skip_grad_scale_factor4_l2loss": "gaussiansr_paper",
+        f"results_3d_data_factor16_{scene}_max_steps30000_default_gaussian_sr_scale_factor4_l1loss_ssim0_2": "subpixel",
+        f"results_3d_data_factor16_{scene}_max_steps30000_mcmc_max_splats3000000_gaussian_sr_stablesr0_001_noise_scheduler_annealing100_min_step20_max_step980_scale_factor4_l1loss_ssim0_2": "gaussiansr_mcmc_l1loss_ours",
+        f"results_3d_data_factor16_{scene}_max_steps30000_mcmc_max_splats3000000_gaussian_sr_stablesr0_001_noise_scheduler_annealing100_min_step20_max_step980_scale_factor4_l2loss": "gaussiansr_mcmc_ours",
+        f"results_3d_data_factor4_{scene}_max_steps30000_default_srgs4_stablesr": "srgs_paper",
+        f"results_3d_data_factor4_{scene}_max_steps30000_mcmc_max_splats3000000_srgs4_stablesr": "srgs_ours",
+        # for testing purposes
+        f"results_3d": "test",
+    }
 
 
 def main() -> None:  #
@@ -569,9 +591,9 @@ def main() -> None:  #
         "--debug", action="store_true", help="does a dry run of sbatch command"
     )
     parser.add_argument(
-        "--top-psnr",
+        "--collect-validation-data",
         action="store_true",
-        help="scans directory for results_2d* folders and checks psnr in checkpoints",
+        help="scans directories and creates a table with best validation checkpoint",
     )
     parser.add_argument("--dir", type=str, default=".", help="dir to check for psnr")
     parser.add_argument(
@@ -590,6 +612,7 @@ def main() -> None:  #
         action="store_true",
         help="run all expriemnents needed for the thesis for particular scene",
     )
+    parser.add_argument("--scene", type=str, default="bicycle", help="scene name")
     opt = parser.parse_args()
 
     default_run_args = [
@@ -608,7 +631,7 @@ def main() -> None:  #
     if opt.thesis:
         result_dirs.extend(do_thesis_experiments(default_run_args, opt))
 
-    if opt.top_psnr:
+    if opt.collect_validation_data:
         print("Getting metrics...")
         result_dirs = glob.glob(f"{opt.dir}/results_3d*")
         eval_steps = Config3D().eval_steps
@@ -622,7 +645,10 @@ def main() -> None:  #
             "dirs": [],
             "eval_step": [],
         }
-        for result_dir in result_dirs:
+        dir_to_method = create_lookup_dict(opt.scene)
+        for result_dir in filter(
+            lambda dir: os.path.basename(dir) in dir_to_method, result_dirs
+        ):
             for eval_step in eval_steps:
                 val_filename = f"{result_dir}/stats/val_step{eval_step - 1}.json"
                 if not os.path.exists(val_filename):
@@ -654,7 +680,19 @@ def main() -> None:  #
         df.sort_values(by=["dirs", "psnr"], inplace=True, ascending=False)
         df.drop_duplicates(subset=["dirs"], keep="first", inplace=True)
         df.sort_values(by=["psnr"], inplace=True, ascending=False)
+        df.set_index(["dirs"], inplace=True)
         print(df.to_string())
+        df.to_csv(f"{opt.dir}/{opt.scene}_metrics.csv")
+        print("Selecting best validation renders...")
+        overall_val_path = f"{opt.dir}/{opt.scene}_validation_renders"
+        os.makedirs(overall_val_path, exist_ok=True)
+        for dir in df.index.values:
+            eval_step = int(df.loc[dir]["eval_step"])
+            val_image_path_src = f"{dir}/renders/val_step{eval_step - 1}_0000.png"
+            val_image_path_dst = (
+                f"{overall_val_path}/{dir_to_method[os.path.basename(dir)]}.png"
+            )
+            shutil.copyfile(val_image_path_src, val_image_path_dst)
 
 
 if __name__ == "__main__":

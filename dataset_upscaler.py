@@ -7,7 +7,6 @@ import torch
 import tqdm
 import torchvision.transforms as transforms
 import copy
-from StableSR.ldm.models.diffusion.ddpm import LatentDiffusionSRTextWT
 from StableSR.scripts.sr_val_ddpm_text_T_vqganfin_oldcanvas import (
     load_model_from_config,
     space_timesteps,
