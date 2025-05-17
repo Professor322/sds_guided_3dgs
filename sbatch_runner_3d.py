@@ -681,18 +681,21 @@ def main() -> None:  #
         df.drop_duplicates(subset=["dirs"], keep="first", inplace=True)
         df.sort_values(by=["psnr"], inplace=True, ascending=False)
         df.set_index(["dirs"], inplace=True)
-        print(df.to_string())
-        df.to_csv(f"{opt.dir}/{opt.scene}_metrics.csv")
+        method_column = [
+            dir_to_method[os.path.basename(dir)] for dir in df.index.values
+        ]
+        df["method"] = method_column
         print("Selecting best validation renders...")
         overall_val_path = f"{opt.dir}/{opt.scene}_validation_renders"
         os.makedirs(overall_val_path, exist_ok=True)
         for dir in df.index.values:
             eval_step = int(df.loc[dir]["eval_step"])
+            method_name = df.loc[dir]["method"]
             val_image_path_src = f"{dir}/renders/val_step{eval_step - 1}_0000.png"
-            val_image_path_dst = (
-                f"{overall_val_path}/{dir_to_method[os.path.basename(dir)]}.png"
-            )
+            val_image_path_dst = f"{overall_val_path}/{method_name}.png"
             shutil.copyfile(val_image_path_src, val_image_path_dst)
+        print(df.to_string())
+        df.to_csv(f"{opt.dir}/{opt.scene}_metrics.csv")
 
 
 if __name__ == "__main__":
