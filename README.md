@@ -31,7 +31,7 @@ wget https://huggingface.co/Iceclear/StableSR/resolve/main/stablesr_000117.ckpt 
 wget https://huggingface.co/Iceclear/StableSR/resolve/main/vqgan_cfw_00011.ckpt ./StableSR
 ```
 
-Downscale images to 16 for original size using script
+Downscale images to x16 of original images size using following script
 ```
 bash ./scripts/local_colmap_and_resize.sh ./data/360_v2/bonsai
 bash ./scripts/local_colmap_and_resize.sh ./data/360_v2/stump
@@ -59,9 +59,18 @@ cp default_new.py ~/miniconda3/envs/sds_splats/lib/python3.10/site-packages/gspl
 To reproduce evaluation done in the table one can use `sbatch_runner_3d.py` script. Those executions should be done in the sequantial order
 
 ```
-python3 sbatch_runner_3d.py --debug --thesis > example_run_commands
+python3 sbatch_runner_3d.py --debug --thesis > example_run_commands_3d
 ```
 
+Checkpoints can be visualised using:
+```
+python3 viewer_3d.py --ckpt <ckpt_path> --output_dir <output_dir>
+```
+
+There is also an option to do image fitting using `trainer_2d.py`. One can use `sbatch_runner_2d.py` to get sample commands:
+```
+python3 sbatch_runner_2d.py --sds-experiments --debug > example_run_commands_2d
+```
 
 ## Quantative results
 | Method / Scene                     | Bicycle              |        |         | Stump               |        |         | Bonsai              |        |         |
