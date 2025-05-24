@@ -1,65 +1,80 @@
-# 3D Gaussian splatting guided by Score Distillation Sampling
-3D Gaussian splatting guided by score distillation sampling <br>
-
-To implement the Gaussian Splatting part we decided utilize [gsplat library](https://github.com/nerfstudio-project/gsplat) <br>
-Arxiv reference: https://arxiv.org/abs/2409.06765
-
-## Gsplat installation notes
-* I decided to work on the latest mainline as contributors pushing their code to fix existing library
-* On the mainline maintainers introduced some compression techniques. Not from the dicsussed paper, but rather just a meaningfull way of doing .png compression.
-* Working with their mainline necessitates install it from the source using `pip install git+https://github.com/nerfstudio-project/gsplat.git `. <br>
-  During installation library will compile cuda kernels. If you hit any problems running out of CPU RAM try reducing `MAX_JOBS`.
-
-## Notes on working with gsplat
-* As a base implementation I took code from `examples` directory and got rid of
-* Tried to use gsplat to render scenes from NerF 360 data set - real time rendering works along with visualisation, checkpointing, validation
-
-## Some thoughts
-* It seems like in the world of 3d rendering people are chasing training speed, rendering speed and quality. SDS will definetly decrease training speed.
-* If all goes well I think the code from this repo should be pushed as a pull request to gsplat library.
-* Beauty of 3D Gaussian splatting is that is start with small number of ellipsoids, so that not all GPU memory allocated in the beginning of the training <br>
-  This allows to prototype on the low end PCs
-* Need to try different upscales of super resolution diffusion models
-* SR Diffusion models require interpolation step. Can we maybe use image reconstruction diffusion models: https://arxiv.org/pdf/2306.11536?
+# Enhancing Gaussian Splat Scene Representation Using Diffusion-Based Super Resolution
+## Executive summary
+3D Gaussian Splats as a method for scene reconstruction has gained popularity due to the quality of novel view synthesis (NVS), fast training, and real-time rendering of viewpoints. Despite the impressive results of the method, models trained on low-resolution images suffer from sparse primitives and a lack of texture when generating higher-resolution projections (High Resolution Novel View Synthesis, HRNVS). The most successful solutions to the HRNVS problem are methods based on super-resolution models. In the SRGS paper, it was proposed to use super-resolution models and regulate training with original resolution images to eliminate generative artifacts. Another approach was presented in the GaussianSR paper, which used score distillation sampling from diffusion models. Both methods showed improved reconstruction quality in high-resolution space. In this work, we thoroughly analyze the aforementioned methods and reproduce their experiments. We also propose a number of improvements and conduct extended validation, which includes algorithmic interpolation and simple training on images synthesized by a super-resolution model. We perform validation of the core methods and our enhancements on the Mip-NeRF 360 dataset. To our surprise, the most effective methods in terms of statistical metrics turned out to be bicubic interpolation and simple training on images synthesized by a super-resolution model, followed by training the Gaussian splats on these generated images.
 
 
-## Some useful commands
+## How to run this code
 
-To download MipNerf dataset. (It will take some time)
+Pull StableSR and apply compatibility patch
 ```
-python ./datasets/download_dataset.py
+git submodule init
+git submodule update
+git apply StableSR_compatibility.patch ./StableSR
 ```
 
-To create point cloud from the existing data (courtesy of Google NeRF360). Make sure that `data_path` has directory `images`
+Create environment and install dependencies
 ```
-./scripts/local_colmap_and_resize.sh <data_path>
-```
-
-To check how well loading colmap loading works. This will create a video clip in results directory with <br>
-points mapped to train images
-```
-python3 ./datasets/colmap.py --data_dir=data/360_v2/bicycle
+conda create -n sds_splats python=3.10
+pip install -r requirements.txt
 ```
 
-To train
+Pull the dataset for MipNerf360
 ```
-CUDA_VISIBLE_DEVICES=0 python simple_trainer.py default --eval_steps -1 --disable_viewer --data_factor 2 \
-    --render_traj_path "ellipse" \
-    --data_dir <data_dir> \
-    --result_dir results/benchmark/<scene>
+python datasets/download_dataset.py
 ```
 
-To render from checkpoint
+Get checkpoints for StableSR
 ```
-CUDA_VISIBLE_DEVICES=0 python simple_trainer.py default --disable_viewer --data_factor $DATA_FACTOR \
-    --render_traj_path "ellipse" \
-    --data_dir <data_dir> \
-    --result_dir results/benchmark/<scene> \
-    --ckpt results/benchmark/<scene>/<checkpoint>
+# for U-net
+wget https://huggingface.co/Iceclear/StableSR/resolve/main/stablesr_000117.ckpt ./StableSR
+# for VAE
+wget https://huggingface.co/Iceclear/StableSR/resolve/main/vqgan_cfw_00011.ckpt ./StableSR
 ```
 
-## TODO
-* Missing SDS integation
-* Check how SSIM works
-* Add wandb logging
-* https://arxiv.org/abs/2401.05293
+Downscale images to 16 for original size using script
+```
+bash ./scripts/local_colmap_and_resize.sh ./data/360_v2/bonsai
+bash ./scripts/local_colmap_and_resize.sh ./data/360_v2/stump
+bash ./scripts/local_colmap_and_resize.sh ./data/360_v2/bicycle
+```
+
+Upscale images from x16 to x4 using bicubic interpolation and StableSR upscale
+```
+# bicuibic
+PYTHONPATH=$PYTHONPATH:./StableSR python3 dataset_upscaler.py --data-factor 16 --scale-factor 4 --data-dir ./data/360_v2/bonsai
+PYTHONPATH=$PYTHONPATH:./StableSR python3 dataset_upscaler.py --data-factor 16 --scale-factor 4 --data-dir ./data/360_v2/stump
+PYTHONPATH=$PYTHONPATH:./StableSR python3 dataset_upscaler.py --data-factor 16 --scale-factor 4 --data-dir ./data/360_v2/bicycle
+# stableSR
+
+PYTHONPATH=$PYTHONPATH:./StableSR python3 dataset_upscaler.py --data-factor 16 --upscale-type stablesr --scale-factor 4 --data-dir ./data/360_v2/bonsai
+PYTHONPATH=$PYTHONPATH:./StableSR python3 dataset_upscaler.py --data-factor 16 --upscale-type stablesr --scale-factor 4 --data-dir ./data/360_v2/stump
+PYTHONPATH=$PYTHONPATH:./StableSR python3 dataset_upscaler.py --data-factor 16 --upscale-type stablesr --scale-factor 4 --data-dir ./data/360_v2/bicycle
+```
+
+To use densification dropout substitute default strategy fily in gsplat
+```
+cp default_new.py ~/miniconda3/envs/sds_splats/lib/python3.10/site-packages/gsplat/strategy/default.py
+```
+
+To reproduce evaluation done in the table one can use `sbatch_runner_3d.py` script. Those executions should be done in the sequantial order
+
+```
+python3 sbatch_runner_3d.py --debug --thesis > example_run_commands
+```
+
+
+## Quantative results
+| Method / Scene                     | Bicycle              |        |         | Stump               |        |         | Bonsai              |        |         |
+|----------------------------------|----------------------|--------|---------|---------------------|--------|---------|---------------------|--------|---------|
+|                                  | PSNR ↑               | SSIM ↑ | LPIPS ↓ | PSNR ↑              | SSIM ↑ | LPIPS ↓ | PSNR ↑              | SSIM ↑ | LPIPS ↓ |
+| **Bicubic**                      | **22.62**            | **0.50** | 0.59    | **24.58**           | **0.59** | 0.49    | **26.79**           | **0.76** | 0.38    |
+| **StableSR**                     | _22.21_              | 0.48   | 0.48    | _23.45_             | 0.53   | 0.42    | _26.22_             | **0.76** | _0.26_  |
+| **Subpixel**                     | 21.42                | _0.49_ | **0.30**| 22.12               | 0.50   | **0.29**| 22.16               | 0.60   | **0.23**|
+| **SRGS + MCMC (ours)**          | 21.80                | _0.49_ | _0.43_  | 23.09               | _0.54_ | _0.36_  | 25.11               | _0.75_ | _0.26_  |
+| **SRGS**                         | 21.52                | 0.47   | 0.50    | 22.49               | 0.51   | 0.44    | 25.03               | _0.75_ | _0.26_  |
+| **GaussianSR + MCMC + L1Loss (ours)** | 20.04          | 0.36   | 0.45    | 21.64               | 0.41   | 0.47    | 20.51               | 0.52   | 0.35    |
+| **GaussianSR**                   | 19.10                | 0.34   | 0.57    | 20.51               | 0.38   | 0.55    | 19.87               | 0.50   | 0.38    |
+
+## Visual comparison
+
+![Every method illustration](./readme_images/EveryMethodIllustration.png)
