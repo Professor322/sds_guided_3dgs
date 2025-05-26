@@ -1123,16 +1123,19 @@ class Runner:
                 sh_degree=cfg.sh_degree,
                 near_plane=cfg.near_plane,
                 far_plane=cfg.far_plane,
-                render_mode="RGB+ED",
+                render_mode="RGB+ED" if self.cfg.render_depth_enabled else "RGB",
             )  # [1, H, W, 4]
             colors = torch.clamp(renders[..., 0:3], 0.0, 1.0)  # [1, H, W, 3]
-            depths = renders[..., 3:4]  # [1, H, W, 1]
-            depths = (depths - depths.min()) / (depths.max() - depths.min())
-            canvas_list = [colors, depths.repeat(1, 1, 1, 3)]
+            if self.cfg.render_depth_enabled:
+                depths = renders[..., 3:4]  # [1, H, W, 1]
+                depths = (depths - depths.min()) / (depths.max() - depths.min())
+                canvas_list = [colors, depths.repeat(1, 1, 1, 3)]
 
-            # write images
-            canvas = torch.cat(canvas_list, dim=2).squeeze(0).cpu().numpy()
-            canvas = (canvas * 255).astype(np.uint8)
+                # write images
+                canvas = torch.cat(canvas_list, dim=2).squeeze(0).cpu().numpy()
+            else:
+                colors = colors.squeeze(0).cpu().numpy()
+                canvas = (colors * 255).astype(np.uint8)
             writer.append_data(canvas)
         writer.close()
         print(f"Video saved to {video_dir}/traj_{step}.mp4")

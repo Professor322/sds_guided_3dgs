@@ -16,6 +16,9 @@ class Config3D:
     # Render trajectory path
     render_traj_path: str = "interp"
 
+    # enable depth render
+    render_depth_enabled: bool = True
+
     # Path to the Mip-NeRF 360 dataset
     data_dir: str = "data/360_v2/garden"
     # Downsample factor for the dataset
