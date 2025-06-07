@@ -180,10 +180,9 @@ class SDSLoss3DGS(torch.nn.Module):
         self.device = torch.device("cuda:0")
 
         # this is to make it work on the cluster as it does not have internet access to download the model
-        deepfloyd_sr_model_path = "/home/nskochetkov/.cache/huggingface/hub/models--DeepFloyd--IF-II-L-v1.0/snapshots/609476ce702b2d94aff7d1f944dcc54d4f972901"
+        deepfloyd_sr_model_path = "DeepFloyd/IF-II-L-v1.0"
         pipe = DiffusionPipeline.from_pretrained(
             deepfloyd_sr_model_path,
-            # text_encoder=None,
             safety_checker=None,
             watermarker=None,
             feature_extractor=None,

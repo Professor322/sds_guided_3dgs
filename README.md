@@ -9,12 +9,14 @@ Pull StableSR and apply compatibility patch
 ```
 git submodule init
 git submodule update
-git apply StableSR_compatibility.patch ./StableSR
+git apply --directory=StableSR StableSR_compatibility.patch
 ```
 
 Create environment and install dependencies
 ```
 conda create -n sds_splats python=3.10
+conda activate sds_splats
+conda install pytorch==2.4.0 torchvision==0.19.0 torchaudio==2.4.0  pytorch-cuda=12.4 -c pytorch -c nvidia
 pip install -r requirements.txt
 ```
 
@@ -26,12 +28,16 @@ python datasets/download_dataset.py
 Get checkpoints for StableSR
 ```
 # for U-net
-wget https://huggingface.co/Iceclear/StableSR/resolve/main/stablesr_000117.ckpt ./StableSR
+wget -O StableSR/stablesr_000117.ckpt https://huggingface.co/Iceclear/StableSR/resolve/main/stablesr_000117.ckpt 
 # for VAE
-wget https://huggingface.co/Iceclear/StableSR/resolve/main/vqgan_cfw_00011.ckpt ./StableSR
+wget -O StableSR/vqgan_cfw_00011.ckpt https://huggingface.co/Iceclear/StableSR/resolve/main/vqgan_cfw_00011.ckpt
 ```
 
-Downscale images to x16 of original images size using following script
+Downscale images to x16 of original images size using following script. Make sure you have colmap installed.
+```
+sudo apt install colmap
+```
+
 ```
 bash ./scripts/local_colmap_and_resize.sh ./data/360_v2/bonsai
 bash ./scripts/local_colmap_and_resize.sh ./data/360_v2/stump
@@ -41,14 +47,14 @@ bash ./scripts/local_colmap_and_resize.sh ./data/360_v2/bicycle
 Upscale images from x16 to x4 using bicubic interpolation and StableSR upscale
 ```
 # bicuibic
-PYTHONPATH=$PYTHONPATH:./StableSR python3 dataset_upscaler.py --data-factor 16 --scale-factor 4 --data-dir ./data/360_v2/bonsai
-PYTHONPATH=$PYTHONPATH:./StableSR python3 dataset_upscaler.py --data-factor 16 --scale-factor 4 --data-dir ./data/360_v2/stump
-PYTHONPATH=$PYTHONPATH:./StableSR python3 dataset_upscaler.py --data-factor 16 --scale-factor 4 --data-dir ./data/360_v2/bicycle
+PYTHONPATH=$PYTHONPATH:StableSR python3 dataset_upscaler.py --data-factor 16 --scale-factor 4 --data-dir ./data/360_v2/bonsai
+PYTHONPATH=$PYTHONPATH:StableSR python3 dataset_upscaler.py --data-factor 16 --scale-factor 4 --data-dir ./data/360_v2/stump
+PYTHONPATH=$PYTHONPATH:StableSR python3 dataset_upscaler.py --data-factor 16 --scale-factor 4 --data-dir ./data/360_v2/bicycle
 # stableSR
 
-PYTHONPATH=$PYTHONPATH:./StableSR python3 dataset_upscaler.py --data-factor 16 --upscale-type stablesr --scale-factor 4 --data-dir ./data/360_v2/bonsai
-PYTHONPATH=$PYTHONPATH:./StableSR python3 dataset_upscaler.py --data-factor 16 --upscale-type stablesr --scale-factor 4 --data-dir ./data/360_v2/stump
-PYTHONPATH=$PYTHONPATH:./StableSR python3 dataset_upscaler.py --data-factor 16 --upscale-type stablesr --scale-factor 4 --data-dir ./data/360_v2/bicycle
+PYTHONPATH=$PYTHONPATH:StableSR python3 dataset_upscaler.py --data-factor 16 --upscale-type stablesr --scale-factor 4 --data-dir ./data/360_v2/bonsai
+PYTHONPATH=$PYTHONPATH:StableSR python3 dataset_upscaler.py --data-factor 16 --upscale-type stablesr --scale-factor 4 --data-dir ./data/360_v2/stump
+PYTHONPATH=$PYTHONPATH:StableSR python3 dataset_upscaler.py --data-factor 16 --upscale-type stablesr --scale-factor 4 --data-dir ./data/360_v2/bicycle
 ```
 
 To use densification dropout substitute default strategy fily in gsplat
@@ -56,7 +62,8 @@ To use densification dropout substitute default strategy fily in gsplat
 cp default_new.py ~/miniconda3/envs/sds_splats/lib/python3.10/site-packages/gsplat/strategy/default.py
 ```
 
-To reproduce evaluation done in the table one can use `sbatch_runner_3d.py` script. Those executions should be done in the sequantial order
+To reproduce evaluation done in the table one can use `sbatch_runner_3d.py` script. This script is used to bootstrap the execution command to start training your 3D splat, using methods like SRGS or GaussianSR. 
+**Important note**: First execution will take longer time because gsplat will build its cuda kernels.
 
 ```
 python3 sbatch_runner_3d.py --debug --thesis > example_run_commands_3d
